@@ -1,6 +1,6 @@
 # Handoff
 
-## Current checkpoint — stage 1 done, stage 2 in progress (2026-11-07)
+## Current checkpoint — stages 1–3 done; STOPPED for user review (2026-11-07)
 
 User approved the build ("Build the Errand Agent") with engineering standards: Python 3.12, mypy --strict, ruff, Pydantic at boundaries, invariant tests first for safety-critical code, parameterized SQL, short transactions, migrations, env config, pinned deps, untrusted model/tool text, explicit error paths, real bugs logged in docs/BUGS.md with regression tests. **Ask before deviating from the design. Stop after stage 3 and show test results.**
 
@@ -8,7 +8,7 @@ Read first: PROGRESS.md, docs/DESIGN.md, docs/DECISIONS.md §§1–16 (§15 buil
 
 Done: stage 1 (see PROGRESS.md). Code layout: `errand_agent/{config,clock,errors,trace,claims}.py`, `errand_agent/db/` (Database, session_txn, migrate, migrations/0001_init.sql), `tests/` (conftest recreates `errand_test` once per session and truncates per test).
 
-Done: stage 2a — `errand_agent/tools/{models,errors,context,client}.py`, `errand_agent/mocks/{catalog,backend}.py` (read-only tools). Done: 2b (hold/book/status, RNG, replay, fencing; `tests/helpers.py` builds operation/attempt rows directly for backend tests). Done: 2c (cancel 503 phase, reschedule conflict). Stage 2 complete. Done: 3a — `errand_agent/workflow/{states,snapshots,templates,approval}.py`. Done: 3b — `errand_agent/workflow/{budget,executor}.py`, migration 0002, docs/BUGS.md (3 real bugs). In progress: 3c recovery/crash/races.
+Done: stage 2a — `errand_agent/tools/{models,errors,context,client}.py`, `errand_agent/mocks/{catalog,backend}.py` (read-only tools). Done: 2b (hold/book/status, RNG, replay, fencing; `tests/helpers.py` builds operation/attempt rows directly for backend tests). Done: 2c (cancel 503 phase, reschedule conflict). Stage 2 complete. Done: 3a — `errand_agent/workflow/{states,snapshots,templates,approval}.py`. Done: 3b — `errand_agent/workflow/{budget,executor}.py`, migration 0002, docs/BUGS.md (3 real bugs). Done: 3c — `errand_agent/workflow/recovery.py`, `tests/test_recovery.py`. **Stage 3 complete: 137 tests pass. Stopped at the user's checkpoint; do not start stage 4 until the user approves.**
 
 Key implementation decisions (within the design):
 - Consequential mock calls carry an internal `Fence` (holder, generation, operation_id, attempt_id) in `ToolContext`, never as tool arguments; backend re-verifies claim + reserved attempt + snapshot under the session advisory lock in the same transaction as the effect.
@@ -17,7 +17,7 @@ Key implementation decisions (within the design):
 
 How to run: `docker compose up -d --wait postgres` then `scripts/dev.sh scripts/check.sh`. From this agent's sandbox, wrap with `wsl.exe --distribution Ubuntu --user laptop --cd <repo> --exec bash -c '...'` (fresh WSL process has docker group). Re-lock deps: `scripts/dev.sh scripts/lock.sh` then `python3 -I scripts/verify_lock_hashes.py requirements.lock requirements-dev.lock` (must report 0 failures before installing).
 
-Next steps: 3c (crash points, restart recovery, two-worker and delayed-worker interleavings). Then STOP and show the user test results. Then STOP and show the user test results.
+Next (after approval): stage 4 — G1–G11 + scripted model (native-call adapter with state-scoped schemas/enums, deterministic date/number parsing and ranking, grounding scanner, five hallucination attacks, injection, repair/retries, degraded menus), then the real Qwen 3.5 smoke. Known gaps carried forward: per-operation active-time and model-call lifetime counters exist in schema but are not yet charged (model calls arrive in stage 4); job rows are written but no worker consumes them yet (stage 6). Then STOP and show the user test results.
 
 <details>
 <summary>Design-phase handoff history (superseded)</summary>
