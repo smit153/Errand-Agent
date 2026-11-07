@@ -286,7 +286,7 @@ This table covers PDF §§1–5, including individual failure modes and delivera
 | §5 3–5 minute full-booking demo, chat/trace side by side | §§8,13,15 | E45 recording duration/content review; live failure desirable |
 | §5 coding-assistant transcript | §§13,15 | E45 retained/exported conversation artifact |
 
-## 15. Risk-ordered build plan — approved; stages 1–5 done (see PROGRESS.md)
+## 15. Risk-ordered build plan — approved; stages 1–6 done (see PROGRESS.md)
 
 Each numbered stage is split into reviewable tasks. Run its acceptance checks before proceeding; update PROGRESS.md and HANDOFF.md after every task. Tracing hooks and minimal journal events start with persistence/recovery even though the full exporter/eval report is stage 7. Use direct workflow/test harness calls until stage 8; no UI dependency blocks safety validation.
 
@@ -357,6 +357,14 @@ No application files, Compose configuration, database, model downloads or tests 
 The alternatives the user was shown were a proxy tokenizer (tiktoken o200k) and enforcement from provider-reported tokens after the call.
 
 **Implementation notes (stage 5a/5b, within §§7, 10).** Stored fields are typed: preferred area, earliest acceptable time (global or per service), preferred provider per service, and short notes in the user's own words. Inspect, confirm, correct and forget are deterministic commands handled by code, like `yes` / `confirm <token>`: they touch only the caller's own memory and never reach the model. Explicit "remember …" is extracted by the model but accepted only when the user's message contains explicit memory wording (and a note only verbatim), so neither the model nor review text can write memory. Saved preferences are applied as visible defaults recomputed each turn rather than copied into the request, so there is no derived state to invalidate on correct/forget. A saved provider never bypasses a filter; it only orders first among eligible options. Inference rules: the last 3 completed, approved bookings of a service with one provider → provider candidate; the last 3 overall all starting ≥ 09:00 → earliest-time candidate; candidates for a forgotten field+scope are never re-created.
+
+## 19. Stage 6 implementation choices (within §§8, 9, 11)
+
+- **Durable dispatch.** The first dispatch still happens in the user's turn (the model proposes the consequential call, G7), but once the proposal passes the snapshot check, the same transaction records it and creates an `operation_execute` job claimed by that turn. If the process dies, the claim expires and a worker resumes the operation, reconciling first. A worker never dispatches an approval whose proposal didn't pass the check. Retries, reconciliation follow-ups and provider-cancellation handling are queued jobs (`FOR UPDATE SKIP LOCKED`, leases, busy sessions put back without using an attempt).
+- **Failed status checks are spread out** (BUG-008): at most 2 back-to-back per drive, then a follow-up every 30 s, within the lifetime cap of 6. The user gets a final "still can't confirm" notice when follow-ups stop.
+- **Provider cancellations** come from a simulated provider event feed (`mock_provider_events`, written only by the simulation control), and are always confirmed with `list_bookings` before anything happens. The watcher is deterministic, with no second LLM agent. The replacement search uses the same day, the constraints the original card was approved under (kept with the proposal and operation), confirmed saved preferences for bookings made elsewhere, and never the provider who cancelled. It runs in a new follow-up conversation so it can't disturb one in progress. The card goes out through the outbox; its display receipt is recorded when the client fetches it, and approval is always fresh. Nothing is rebooked automatically, and a no-match explains why without loosening any constraint.
+- **Notifications** are at-least-once with stable IDs (`event_key` per operation+status or per event); only the owner can acknowledge. Clients de-duplicate by ID.
+- **Known limit:** a crash after a replacement hold but before the card can leave one extra hold, which expires by itself in 10 minutes and never becomes a booking.
 
 ## Appendix A — v1 decisions (superseded historical record)
 

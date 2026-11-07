@@ -207,3 +207,9 @@ def test_provider_slot_cannot_be_double_booked(db: Database, clock: FakeClock) -
             " updated_at) VALUES ('b2', 'u', 'p1', 'plumber', %s, 900, 'confirmed', %s, %s)",
             (slot, now, now),
         )
+
+
+def test_pending_reports_nothing_on_a_migrated_database(test_conninfo: str) -> None:
+    from errand_agent.db.migrate import pending
+
+    assert pending(test_conninfo) == []

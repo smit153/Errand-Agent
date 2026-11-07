@@ -98,8 +98,19 @@ class ApprovalGate:
         self._clock = clock
 
     # ------------------------------------------------------------------ proposals
-    def propose(self, session_id: int, snapshot: AnySnapshot, *, run_id: UUID | None = None) -> Proposal:
-        """Create (or return the identical) pending proposal; supersede a materially different one."""
+    def propose(
+        self,
+        session_id: int,
+        snapshot: AnySnapshot,
+        *,
+        run_id: UUID | None = None,
+        constraints: dict[str, Any] | None = None,
+    ) -> Proposal:
+        """Create (or return the identical) pending proposal; supersede a materially different one.
+
+        `constraints` (the request the card was built from) is kept with the proposal and copied to
+        the operation, so a later replacement search can respect what the user asked for.
+        """
         now = self._clock.now()
         digest = snapshot_hash(snapshot)
         with self._db.session_txn(session_id) as conn:
@@ -138,6 +149,8 @@ class ApprovalGate:
                 supersedes=pending,
                 now=now,
             )
+            if constraints is not None:
+                conn.execute("UPDATE proposals SET constraints = %s WHERE id = %s", (Jsonb(constraints), proposal_id))
             transition(conn, session_id, "awaiting_approval", now=now, reason=f"proposal r{revision}", run_id=run_id)
             trace.record(
                 conn,
@@ -291,8 +304,8 @@ class ApprovalGate:
         conn.execute("UPDATE proposals SET status = 'approved' WHERE id = %s", (proposal.id,))
         conn.execute(
             "INSERT INTO operations (id, session_id, user_id, proposal_id, approval_id, action, snapshot,"
-            " idempotency_key, status, created_at, updated_at)"
-            " VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'approved', %s, %s)",
+            " idempotency_key, status, constraints, created_at, updated_at)"
+            " VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'approved', %s, %s, %s)",
             (
                 operation_id,
                 session_id,
@@ -302,6 +315,7 @@ class ApprovalGate:
                 proposal.snapshot.action,
                 Jsonb(proposal.snapshot.model_dump(mode="json")),
                 key,
+                Jsonb(row["constraints"]) if row["constraints"] is not None else None,
                 now,
                 now,
             ),

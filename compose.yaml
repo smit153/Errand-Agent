@@ -51,6 +51,7 @@ services:
     environment:
       ERRAND_DB_HOST: postgres
       ERRAND_DB_PORT: "5432"
+      ERRAND_EMBED_URL: http://ollama:11434  # reachable when the `embed` profile is up
     volumes:
       - .:/app
       - errand-venv:/opt/venv

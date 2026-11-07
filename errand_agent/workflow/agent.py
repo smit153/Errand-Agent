@@ -353,7 +353,7 @@ class Agent:
             hold_id=hold.hold_id,
             hold_expires_at=hold.expires_at,
         )
-        self._present(run, turn, snapshot)
+        self._present(run, turn, snapshot, request_constraints(req))
 
     def _plan_booking_change(self, run: Run, turn: _Turn, clarifications: list[Clarification]) -> None:
         sess = self._load(run)
@@ -406,8 +406,14 @@ class Agent:
         )
         self._present(run, turn, snapshot)
 
-    def _present(self, run: Run, turn: _Turn, snapshot: BookSnapshot | CancelSnapshot | RescheduleSnapshot) -> None:
-        proposal = self.gate.propose(run.session_id, snapshot, run_id=run.id)
+    def _present(
+        self,
+        run: Run,
+        turn: _Turn,
+        snapshot: BookSnapshot | CancelSnapshot | RescheduleSnapshot,
+        constraints: dict[str, Any] | None = None,
+    ) -> None:
+        proposal = self.gate.propose(run.session_id, snapshot, run_id=run.id, constraints=constraints)
         receipt = self.gate.display(run.session_id, proposal.id)
         turn.messages.append(receipt.text)
         turn.receipt_id = receipt.id
@@ -1008,3 +1014,13 @@ def _memory_query(req: RequestFacts) -> str:
     if req.preferred_provider_name:
         parts.append(f"with {req.preferred_provider_name}")
     return " ".join(parts)
+
+
+def request_constraints(req: RequestFacts) -> dict[str, Any]:
+    """The validated constraints a booking card was built from (kept with the operation)."""
+    return {
+        "area": req.area,
+        "date": req.date.model_dump(mode="json") if req.date else None,
+        "time": req.time.model_dump(mode="json") if req.time else None,
+        "budget": req.budget.model_dump(mode="json") if req.budget else None,
+    }

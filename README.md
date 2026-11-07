@@ -9,7 +9,7 @@ payments. The language model is reached through a local ModelMux gateway (see [L
 
 ## Status
 
-Stages 1–5 of the 8-stage build plan are done (see [PROGRESS.md](PROGRESS.md)):
+Stages 1–6 of the 8-stage build plan are done (see [PROGRESS.md](PROGRESS.md)):
 
 1. PostgreSQL 16 + pgvector schema, migrations, test harness, durable claims with generation fencing.
 2. All eight fixed mock tools with seeded, configurable failure behaviour.
@@ -22,8 +22,12 @@ Stages 1–5 of the 8-stage build plan are done (see [PROGRESS.md](PROGRESS.md))
 5. Persistent memory (explicit vs inferred, inspect/correct/forget) and context management: a fixed
    4,096-byte context cap with a drop order, relevance-ranked memories behind SQL hard filters, and
    a hostile 50+ memory seed that proves only relevant, current, confirmed facts reach the model.
+6. Background work: a Postgres job queue (`SKIP LOCKED`, leases) for durable dispatch, the
+   cancel-503 retry and verification follow-ups; a provider-cancellation watcher that finds a
+   replacement within the user's constraints and asks for fresh approval; an outbox for
+   notifications (at-least-once, stable IDs).
 
-Background workers, trace export/eval table and the CLI are not built yet. Real bugs found so far are in [docs/BUGS.md](docs/BUGS.md).
+Trace export, the eval table and the CLI are not built yet. Real bugs found so far are in [docs/BUGS.md](docs/BUGS.md).
 
 ## Layout
 
@@ -34,6 +38,7 @@ Background workers, trace export/eval table and the CLI are not built yet. Real 
 | `errand_agent/tools/` | The eight tool contracts (Pydantic models) and `ToolClient` |
 | `errand_agent/llm/` | Model types, scripted model, ModelMux adapter, validated tool calls, grounding |
 | `errand_agent/memory/` | Typed memory facts, store (lifecycle, filtered retrieval), embedders, seed data |
+| `errand_agent/workers/` | Job worker, provider-cancellation watcher, outbox, runner (`python -m errand_agent.workers`) |
 | `errand_agent/workflow/` | Agent, state machine, approval gate, executor, budgets, recovery, parsing, ranking, templates |
 | `tests/` | Invariant and contract tests against real Postgres |
 
@@ -104,6 +109,18 @@ replaced the original local-Ollama plan by the developer's decision (DECISIONS �
 - **Measured so far.** Codex (`gpt-6.1-sol`), two runs on 2026-11-07: 3/3 flows completed, 24/24 tool
   calls valid on the first attempt, no booking without approval, median call latency about 5.5 s.
   Claude has not been measured yet.
+
+## Background worker
+
+```bash
+scripts/dev.sh python -m errand_agent.db.migrate        # once per schema change
+scripts/dev.sh python -m errand_agent.workers           # loop; --once for a single tick
+```
+
+The worker ingests provider-cancellation events, runs due jobs (retries, verification
+follow-ups, crash recovery) and writes user notifications to the outbox. It uses no language
+model, holds no state of its own, and several can run at once. It refuses to start if migrations
+are pending.
 
 ## Memory and embeddings
 

@@ -464,3 +464,31 @@ def still_pending(action: str) -> str:
         f"Update on your earlier {noun}: I still can't confirm whether it went through, and I've stopped "
         "checking automatically. Nothing will be retried without verification. Ask me for its status any time."
     )
+
+
+def provider_cancelled(booking: BookingLike) -> str:
+    return (
+        f"{booking.provider_name} cancelled your {service_label(booking.service)} booking {booking.booking_id} "
+        f"for {when(booking.slot)}. That booking is no longer active, and nothing new has been booked."
+    )
+
+
+def replacement_heading(service: str, area: str, day: str, constraints: list[str]) -> str:
+    extra = f"; {'; '.join(constraints)}" if constraints else ""
+    return (
+        f"Replacement {service_label(service)} options in {area.replace('_', ' ').title()} on {day}"
+        f"{extra} (excluding the provider who cancelled), cheapest first:"
+    )
+
+
+REPLACEMENT_HELD = (
+    "I've held the best one. Nothing is booked until you approve it; "
+    "tell me if you'd rather change the day, time or provider."
+)
+
+
+def replacement_none(service: str, area: str, day: str, reasons: str) -> str:
+    return (
+        f"I looked for another {service_label(service)} in {area.replace('_', ' ').title()} on {day} within what "
+        f"you asked for, but found none: {reasons} Tell me another day or time and I'll search again."
+    )

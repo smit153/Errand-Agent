@@ -68,6 +68,23 @@ def migrate(conninfo: str) -> list[str]:
     return applied_now
 
 
+def pending(conninfo: str) -> list[str]:
+    """Migrations not yet applied (read-only). Raises MigrationError if an applied one was modified."""
+    with psycopg.connect(conninfo, autocommit=True) as conn:
+        exists = conn.execute("SELECT to_regclass('schema_migrations') IS NOT NULL").fetchone()
+        rows = (
+            conn.execute("SELECT version, checksum FROM schema_migrations").fetchall() if exists and exists[0] else []
+        )
+    done = {int(r[0]): str(r[1]) for r in rows}
+    missing: list[str] = []
+    for version, name, sql in _migration_files():
+        if version not in done:
+            missing.append(name)
+        elif done[version] != hashlib.sha256(sql.encode("utf-8")).hexdigest():
+            raise MigrationError(f"applied migration {name} was modified after apply")
+    return missing
+
+
 def main() -> None:
     names = migrate(load_settings().conninfo())
     print("applied:", ", ".join(names) if names else "nothing (up to date)")

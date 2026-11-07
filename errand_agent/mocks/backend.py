@@ -524,8 +524,9 @@ class MockBackend:
         return (booking["provider_id"], new_slot) in _busy_slots(conn, [booking["provider_id"]], now)
 
     # ------------------------------------------------------------------ simulated provider events
-    def simulate_provider_cancellation(self, booking_id: str) -> None:
-        """Test/demo control (not a tool): the provider cancels a confirmed booking."""
+    def simulate_provider_cancellation(self, booking_id: str, *, events: int = 1) -> list[str]:
+        """Test/demo control (not a tool): the provider cancels a confirmed booking and announces it
+        on its event feed (`events` > 1 delivers the same cancellation more than once)."""
         with self._db.txn() as conn:
             _lock_mock(conn)
             updated = conn.execute(
@@ -535,6 +536,23 @@ class MockBackend:
             ).rowcount
         if updated != 1:
             raise ToolRejectedError("simulate_provider_cancellation", "not_found", booking_id)
+        return [self.emit_provider_event(booking_id) for _ in range(events)]
+
+    def emit_provider_event(self, booking_id: str) -> str:
+        """Test/demo control: put a cancellation event on the provider's feed (even a false one)."""
+        with self._db.txn() as conn:
+            _lock_mock(conn)
+            row = fetch_one(conn, "SELECT user_id FROM mock_bookings WHERE id = %s", (booking_id,))
+            if row is None:
+                raise ToolRejectedError("emit_provider_event", "not_found", booking_id)
+            n = fetch_one(conn, "SELECT count(*) AS n FROM mock_provider_events WHERE booking_id = %s", (booking_id,))
+            event_id = f"PEV-{booking_id}-{int(n['n']) + 1 if n else 1}"
+            conn.execute(
+                "INSERT INTO mock_provider_events (id, kind, booking_id, user_id, emitted_at)"
+                " VALUES (%s, 'booking_cancelled', %s, %s, %s)",
+                (event_id, booking_id, row["user_id"], self._clock.now()),
+            )
+        return event_id
 
 
 # ---------------------------------------------------------------------- helpers

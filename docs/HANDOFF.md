@@ -1,12 +1,12 @@
 # Handoff
 
-## Current checkpoint — stage 6 in progress (2026-11-08)
+## Current checkpoint — stage 6 done (2026-11-08)
 
-Stages 1–5 done; 364 offline tests + 2 live Ollama tests (`-m ollama`) pass. Stage 5: memory store (migration 0004, lifecycle as DB checks), agent integration (code-handled memory commands, cue-checked "remember", per-turn defaults, inferred suggestions), 4,096-byte context builder with drop order, hostile 50+ memory seed (E21/E22), real Ollama embedder (0.40.11 + nomic digest pinned), threshold calibrated to 0.45 on recorded real vectors. Codex smoke with memory on passes 3/3.
+Stages 1–6 done; 385 offline tests + 2 live Ollama tests pass. Stage 6: job queue (`errand_agent/queue.py`), worker (`workers/jobs.py`), outbox (`workers/outbox.py`), provider-cancellation watcher (`workers/watcher.py`), runner + `python -m errand_agent.workers`, `runtime.py` (refuses a database with pending migrations). Migrations 0005/0006. Real bugs BUG-007 (job blocked its own continuation) and BUG-008 (status outage spent all reconciliations at once). DECISIONS §19 records the stage-6 choices.
 
-Running things from this shell: Docker via `wsl.exe --distribution Ubuntu --user laptop --cd <repo> --exec bash -c '...'`. Ollama: `docker compose --profile embed up -d --wait ollama`. Live E43: `docker compose --profile dev run --rm -T -e ERRAND_EMBED_URL=http://ollama:11434 dev pytest -m ollama`. Never read or print the ModelMux key; only `scripts/modelmux_key.sh` touches it. Claude provider is still not logged in.
+Running things from this shell: Docker via `wsl.exe --distribution Ubuntu --user laptop --cd <repo> --exec bash -c '...'`. Ollama: `docker compose --profile embed up -d --wait ollama` (dev container reaches it as `ollama`). Never read or print the ModelMux key. Claude provider is still not logged in.
 
-Stage 6a (job worker, durable dispatch job, retries/reconcile follow-ups, outbox; BUG-007/008) done; 375 tests. Next: 6b provider-cancellation watcher (see PROGRESS plan), then 6c runner loop. Commits: no AI attribution lines.
+Next: stage 7 — trace export (raw file for a run including timeout-after-success), generated eval table (scenario · expected · actual · pass/fail · notes) from the test run, annotated trace excerpt and one-page check of DESIGN.md, "three real bugs" write-up (8 logged in BUGS.md). Then stage 8: FastAPI + thin CLI (chat + live trace, notifications), README/demo. Commits: no AI attribution lines.
 
 ## Earlier checkpoint — stages 1–3 done and reviewed; pre-stage-4 requests handled (2026-11-07)
 
