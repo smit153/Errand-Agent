@@ -1,6 +1,6 @@
 # Progress
 
-**Build in progress (started 2026-11-07, user-approved).** Source of truth: `Orange_Engineering_Assignment.pdf`. The user reports adding `ASSIGNMENT.md` and `docs/DESIGN_REVISION_v2.md`, but on 2026-11-07 neither was in the working tree, any branch or stash, so the v2 cross-check is still pending; until then v2 is taken from docs/DESIGN.md + docs/DECISIONS.md §§1–16. Build plan: DECISIONS.md §15. Stages 1–3 done and reviewed at the user's checkpoint; stage 4 starts after the pre-stage-4 items below. Commits carry no AI attribution lines (user instruction).
+**Build in progress (started 2026-11-07, user-approved).** Source of truth: `Orange_Engineering_Assignment.pdf` (v2 calls it "ASSIGNMENT.md (the PDF)"; no separate ASSIGNMENT.md file is in the repo). `docs/DESIGN_REVISION_v2.md` was saved from the user's paste and cross-checked: every v2 point is in docs/DECISIONS.md §§1–16 / DESIGN.md. Build plan: DECISIONS.md §15. Stages 1–3 done and reviewed at the user's checkpoint; stage 4 starts after the pre-stage-4 items below. Commits carry no AI attribution lines (user instruction).
 
 ## How to run checks
 `scripts/dev.sh scripts/check.sh` (from a shell in the `docker` group) runs inside the pinned Python 3.12 dev container: hash-verified install, `ruff format --check`, `ruff check`, `mypy --strict`, `pytest` against the Compose Postgres. Start Postgres first: `docker compose up -d --wait postgres`.
@@ -24,7 +24,7 @@
 
 ## Pre-stage-4 requests (2026-11-07)
 - [x] Git identity fixed and AI attribution removed from history by the user; no attribution in future commits.
-- [ ] Cross-check `ASSIGNMENT.md` / `docs/DESIGN_REVISION_v2.md` against DESIGN.md/DECISIONS.md — **blocked: files not found**.
+- [x] Cross-check `docs/DESIGN_REVISION_v2.md` (saved from the user's paste) against DESIGN.md/DECISIONS.md: nothing from v2 is missing. Follow-ups recorded under Open items (job-queue dispatch, event ingestion, stale status lines, one-page check).
 - [x] Write-ahead `tool.attempt_started` trace event before every tool call (same `call_id` as the completion `tool.call`); a crashed call still shows. 140 tests pass.
 - [x] Open items recorded below.
 - [x] README with setup and the PyPI mirror/hash-verification note.
@@ -32,6 +32,11 @@
 ## Open items
 - [ ] **Per-operation model-call and active-time lifetime limits (stage 4).** Schema has `operations.physical_model_calls` (CHECK ≤ 40) and `operations.active_ms` (CHECK ≤ 300000), but nothing charges them yet. Wire them up in stage 4 with the model adapter: reserve per physical model request, charge active time (model, tool and lock waits; not queued retry or user waiting), conservatively charge outstanding work after a crash, and test that a new run cannot reset them (E23).
 - [ ] **Retry worker (stage 6).** `operation_retry` job rows are written on a cancel 503 (`retry_wait`, `next_retry_at`), but no worker consumes them; retries currently happen only via `OperationExecutor.resume`. Stage 6: `FOR UPDATE SKIP LOCKED` job loop, due scheduling, claim/generation fencing, crash recovery, original lifetime budgets (E14/E31/E32).
+
+- [ ] **Route booking dispatch and reconciliation through the job queue (stage 6).** v2 §4 lists booking dispatch, retries, reconciliation and cancellation follow-ups as `SKIP LOCKED` jobs. Today the executor dispatches inline in its caller; only cancel retries write a job row. Stage 6 must make the job worker the caller of `OperationExecutor` for these.
+- [ ] **Unique constraint on provider-event ingestion (stage 6).** v2 §4 requires one; the cancellation-event table doesn't exist yet.
+- [ ] **Stale status lines.** DESIGN.md line 3 ("implementation awaits approval") and DECISIONS.md line 3 / §15 heading ("pending approval, no code yet") predate the build approval. Update them with the next design-doc edit.
+- [ ] **One-page check of DESIGN.md** (v2 §8.1) after the real trace excerpt is added (stage 7).
 
 ## Environment notes
 - Host has only Python 3.14; toolchain runs in Docker (`Dockerfile.dev`, runs as uid 1000).

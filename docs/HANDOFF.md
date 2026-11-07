@@ -6,7 +6,7 @@ User follow-ups after the stage-3 checkpoint:
 - Git identity is now `smit153` (set by the user) and history has no AI attribution. **Never add Co-Authored-By or "Generated with" lines to commits.**
 - Write-ahead `tool.attempt_started` event added before every tool call (`errand_agent/tools/client.py`); completion `tool.call` shares its `call_id`.
 - README.md added (setup, mirror and hash verification). Open items (per-operation model-call/time limits → stage 4; retry worker → stage 6) are in PROGRESS.md.
-- **Pending:** the user says they added `ASSIGNMENT.md` and `docs/DESIGN_REVISION_v2.md`, but neither file was found (working tree, branches, stash, home and C:\Users searched). When they appear, cross-check them against DESIGN.md/DECISIONS.md and report anything from v2 that's missing, before starting stage 4.
+- `docs/DESIGN_REVISION_v2.md` saved from the user's paste and cross-checked: nothing from v2 is missing in DECISIONS.md §§1–16 / DESIGN.md. Its "no code / stop for approval" step is historical (already done; the build was then approved). v2 calls the PDF "ASSIGNMENT.md"; no separate ASSIGNMENT.md file exists. Follow-ups are in PROGRESS.md Open items. Next: wait for the user's go-ahead on stage 4.
 
 ## Previous checkpoint — stages 1–3 done; stopped for user review (2026-11-07)
 
