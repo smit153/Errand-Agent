@@ -1,0 +1,47 @@
+{
+  "description": "Labeled retrieval pairs for the real-embedder check (E43) and for calibrating the minimum cosine (DECISIONS §10). Queries are built from structured requests, as the agent builds them; documents are canonical memory texts. 'relevant' and 'irrelevant' are disjoint; global notes are 'neutral' (always eligible, mildly related at most) and are not used for the threshold.",
+  "queries": {
+    "plumber": "book plumber in Indiranagar mornings only",
+    "electrician": "book electrician in Koramangala",
+    "ac": "reschedule AC servicing",
+    "carpenter": "book carpenter in Whitefield",
+    "cleaning": "book cleaning in Jayanagar not before 10:00 AM (saved)"
+  },
+  "documents": {
+    "plumber": [
+      "Preferred plumber provider: Lokesh Plumbing (PLU-IND-03)",
+      "Note for plumber: Kitchen tap is a single-lever mixer from 2019",
+      "Note for plumber: Main water valve is under the kitchen sink",
+      "Note for plumber: Bathroom flush leaks slowly",
+      "Note for plumber: Water pressure is low in the mornings"
+    ],
+    "electrician": [
+      "Preferred electrician provider: Jatin Electricals (ELE-IND-01)",
+      "Note for electrician: Old wiring in the bedroom",
+      "Note for electrician: The MCB box is behind the main door",
+      "Note for electrician: Ceiling fan in the hall wobbles"
+    ],
+    "ac": [
+      "Preferred AC servicing provider: Harish Cooling Care (ACS-IND-01)",
+      "Note for AC servicing: Split AC unit is on the balcony",
+      "Note for AC servicing: Gas refill was done in March",
+      "Note for AC servicing: Filters need cleaning every season"
+    ],
+    "carpenter": [
+      "Note for carpenter: Wardrobe hinge is loose",
+      "Note for carpenter: Kitchen cabinet door does not close",
+      "Note for carpenter: Bookshelf needs wall anchoring"
+    ],
+    "cleaning": [
+      "Earliest acceptable appointment time for cleaning: 10:00 AM",
+      "Note for cleaning: Sofa is fabric, not leather",
+      "Note for cleaning: Deep clean the kitchen chimney"
+    ],
+    "neutral": [
+      "Note: Please call ten minutes before arriving",
+      "Note: There is a friendly dog at home",
+      "Note: Parking is available in the basement",
+      "Preferred area: Indiranagar"
+    ]
+  }
+}

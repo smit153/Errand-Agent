@@ -16,29 +16,21 @@ import json
 import urllib.error
 import urllib.request
 from typing import Any, Literal
-from urllib.parse import urlparse
 
 from pydantic import SecretStr
 
 from errand_agent.llm.types import ChatRequest, ModelReply, ModelUnavailableError, RawToolCall
+from errand_agent.localnet import LocalOnlyError
+from errand_agent.localnet import check_local as _check_local
 
 Provider = Literal["claude", "codex"]
 DEFAULT_URLS: dict[str, str] = {"claude": "http://127.0.0.1:8101/v1", "codex": "http://127.0.0.1:8102/v1"}
-_LOOPBACK = {"127.0.0.1", "localhost", "::1"}
-
-
-class LocalOnlyError(ValueError):
-    pass
+__all__ = ["DEFAULT_URLS", "LocalOnlyError", "ModelMuxChatModel", "check_local", "list_models"]
 
 
 def check_local(base_url: str) -> None:
     """The gateway must be reached over plain http on this machine (loopback or a local service name)."""
-    parsed = urlparse(base_url)
-    host = parsed.hostname or ""
-    if parsed.scheme != "http":
-        raise LocalOnlyError(f"ModelMux URL must be plain http on the local machine, got {base_url!r}")
-    if host not in _LOOPBACK and ("." in host or ":" in host or not host):
-        raise LocalOnlyError(f"ModelMux host {host!r} is not loopback or a local service name")
+    _check_local(base_url, what="ModelMux")
 
 
 def _decode_arguments(raw: Any) -> Any:

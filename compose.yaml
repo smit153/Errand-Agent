@@ -20,6 +20,25 @@ services:
       retries: 30
     restart: unless-stopped
 
+  # Embeddings only (DECISIONS §18): `docker compose --profile embed up -d --wait ollama`.
+  # Ollama 0.40.11 pinned by index digest (pushed 2026-10-24). Loopback only; the model is pulled
+  # once into the volume (see README), after which it runs without network access.
+  ollama:
+    profiles: ["embed"]
+    image: ollama/ollama:0.40.11@sha256:dea72d1e22270fe095b68fdf756d2b489d615643c5a2eaebbc5f569181e322d8
+    environment:
+      OLLAMA_HOST: 0.0.0.0:11434
+    ports:
+      - "127.0.0.1:11434:11434"
+    volumes:
+      - errand-ollama:/root/.ollama
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    restart: unless-stopped
+
   # Toolchain container: `docker compose run --rm dev scripts/check.sh`. Not started by `up`.
   dev:
     profiles: ["dev"]
@@ -42,5 +61,6 @@ services:
 
 volumes:
   errand-pgdata:
+  errand-ollama:
   errand-venv:
   errand-uv-cache:

@@ -30,6 +30,8 @@ from errand_agent.config import Settings, load_settings
 from errand_agent.db import Database
 from errand_agent.db.migrate import migrate
 from errand_agent.llm.factory import build_chat_model
+from errand_agent.memory.factory import MemoryConfigError, build_memory
+from errand_agent.memory.store import MemoryStore
 from errand_agent.mocks.backend import MockBackend, ScenarioConfig
 from errand_agent.mocks.catalog import DEMO_USER
 from errand_agent.tools.client import ToolClient
@@ -157,12 +159,19 @@ def main() -> int:
     backend = MockBackend(db, clock, seed=settings.mock_seed)
     backend.seed(anchor=T0)
     backend.configure(ScenarioConfig(book_outcomes=["success"] * 3))  # the smoke test measures language, not luck
-    agent = Agent(db, clock, ToolClient(backend, db, clock), model, holder="smoke")
+    memory: MemoryStore | None
+    try:
+        memory = build_memory(db, clock, settings)
+        memory_note = f"on ({memory.embedder.model})"
+    except MemoryConfigError as exc:
+        memory, memory_note = None, f"off: {exc}"
+    agent = Agent(db, clock, ToolClient(backend, db, clock), model, holder="smoke", memory=memory)
     try:
         flows = [run_flow(db, agent, flow, clock) for flow in FLOWS]
         report: dict[str, Any] = {
             "when": datetime.now(UTC).isoformat(timespec="seconds"),
             "model": model.name,
+            "memory": memory_note,
             "flows": flows,
             "calls": call_metrics(db),
             "invariants": invariants(db),
@@ -182,6 +191,7 @@ def main() -> int:
         f"{calls['first_pass_valid_rate']}, after retries {calls['after_retries_valid_rate']}; "
         f"latency median {calls['latency_ms']['median']} ms, max {calls['latency_ms']['max']} ms"
     )
+    print(f"  memory: {memory_note}")
     print(f"  ignored by ModelMux: {', '.join(calls['ignored_params']) or 'none reported'}")
     print(f"  invariant no booking without approval: {report['invariants']['no_booking_without_approval']}")
     print(f"  report: {out}")

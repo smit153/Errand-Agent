@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Literal
 
 from psycopg.conninfo import make_conninfo
-from pydantic import Field, SecretStr
+from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -30,9 +30,19 @@ class Settings(BaseSettings):
     modelmux_model: str | None = None  # claude default "sonnet"; codex default: first model the gateway lists
     modelmux_api_key: SecretStr | None = None
 
+    # Embeddings: local Ollama, embeddings only (DECISIONS §18). Loopback; the installed digest is pinned.
+    embed_url: str = "http://127.0.0.1:11434"
+    embed_model: str = "nomic-embed-text:v1.5"
+    embed_digest: str | None = None  # when set, a different installed build is refused
+
     lock_timeout_ms: int = Field(default=2000, ge=1, le=2000)
     statement_timeout_ms: int = Field(default=5000, ge=1)
     claim_lease_seconds: int = Field(default=60, ge=1)
+
+    @field_validator("embed_digest", mode="before")
+    @classmethod
+    def _empty_digest_is_unset(cls, value: object) -> object:
+        return None if value == "" else value
 
     def conninfo(self, dbname: str | None = None) -> str:
         """Build a libpq conninfo string. Values are quoted by psycopg's helper."""

@@ -1,6 +1,6 @@
 # Errand Agent — Design v2
 
-**Design v3 · 7 November 2026 · stages 1–4 built, stage 5 in progress.** The assignment PDF is authoritative; no requirement or fixed tool contract changes. v3 (user decision) replaces local Ollama with the user's ModelMux gateway; see DECISIONS §17. [DECISIONS.md](DECISIONS.md) records details, superseded decisions, tests and build plan.
+**Design v3 · 8 November 2026 · stages 1–5 built.** The assignment PDF is authoritative; no requirement or fixed tool contract changes. v3 (user decision) replaces local Ollama with the user's ModelMux gateway; see DECISIONS §17. [DECISIONS.md](DECISIONS.md) records details, superseded decisions, tests and build plan.
 
 **Architecture and ownership.** Thin CLI (chat and trace side by side) → local FastAPI → explicit workflow → ToolClient/in-process mocks. One language agent calls the user's ModelMux gateway (local OpenAI-compatible Chat Completions; Claude Code or Codex, configurable) with `tools`/`tool_calls`. ModelMux runs locally; its models run on the providers' servers. PostgreSQL 16 + pgvector holds state, approvals, operations/attempts, provider state, memories/vectors, jobs, outbox and traces. Stateless workers resume durable jobs. Code owns IDs, dates, ranking, prices, slots, authorization, execution and consequential messages; the model extracts language and proposes restricted actions. No real errand providers/payments, Redis, Kafka, Kubernetes or separate vector database.
 

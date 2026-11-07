@@ -1,10 +1,12 @@
 # Handoff
 
-## Current checkpoint — stage 4 done (Codex measured); stage 5 starting (2026-11-07)
+## Current checkpoint — stage 5 done (2026-11-08)
 
-Stage 4a–4d done. 4d-b smoke (E42 revised) measured on Codex (`modelmux:codex:gpt-6.1-sol`), two runs: 3/3 flows completed, 24/24 calls valid first pass, median call ≈5.5 s; see PROGRESS 4d-b and `artifacts/smoke/`. BUG-006 (smoke runner read `MODELMUX_API_KEY`; ModelMux writes `MODELMUX_API_KEYS`) fixed via `scripts/modelmux_key.sh` + `tests/test_smoke_scripts.py`; 266 tests pass. Claude provider not logged in; run `scripts/smoke.sh claude` after the user logs in. Never read, print or inspect the gateway key (the auto-mode classifier also blocks it); only `modelmux_key.sh` touches it, inside a command substitution. Docker from this shell: `wsl.exe --distribution Ubuntu --user laptop --cd <repo> --exec bash -c '...'`.
+Stages 1–5 done; 364 offline tests + 2 live Ollama tests (`-m ollama`) pass. Stage 5: memory store (migration 0004, lifecycle as DB checks), agent integration (code-handled memory commands, cue-checked "remember", per-turn defaults, inferred suggestions), 4,096-byte context builder with drop order, hostile 50+ memory seed (E21/E22), real Ollama embedder (0.40.11 + nomic digest pinned), threshold calibrated to 0.45 on recorded real vectors. Codex smoke with memory on passes 3/3.
 
-Stage-5 decisions made by the user (DECISIONS §18): local Ollama `nomic-embed-text` for embeddings only; context cap = 4,096 UTF-8 bytes of app-assembled messages + tool schemas. 5a (memory store, migration 0004) and 5b (agent integration: memory commands, explicit remember with cue check, per-turn defaults, inference suggestions) done; 324 tests pass. 5c (context builder, byte cap, drop order, seeded E21/E22) done; 337 tests pass. Next: 5d — Ollama on loopback (compose service, pinned digest), `OllamaEmbedder` with 10 s timeout and output validation, pull/pin `nomic-embed-text:v1.5`, integration pair-ranking test (E43, explicitly selected marker), wire the embedder into smoke/CLI config. Commits: no AI attribution lines.
+Running things from this shell: Docker via `wsl.exe --distribution Ubuntu --user laptop --cd <repo> --exec bash -c '...'`. Ollama: `docker compose --profile embed up -d --wait ollama`. Live E43: `docker compose --profile dev run --rm -T -e ERRAND_EMBED_URL=http://ollama:11434 dev pytest -m ollama`. Never read or print the ModelMux key; only `scripts/modelmux_key.sh` touches it. Claude provider is still not logged in.
+
+Next: stage 6 (jobs/retry worker, cancel-503 retry via the queue, provider-cancellation watcher with replacement search within known preferences and fresh approval, outbox), plus open items in PROGRESS. Commits: no AI attribution lines.
 
 ## Earlier checkpoint — stages 1–3 done and reviewed; pre-stage-4 requests handled (2026-11-07)
 

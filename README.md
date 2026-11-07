@@ -9,7 +9,7 @@ payments. The language model is reached through a local ModelMux gateway (see [L
 
 ## Status
 
-Stages 1–4 of the 8-stage build plan are done (see [PROGRESS.md](PROGRESS.md)):
+Stages 1–5 of the 8-stage build plan are done (see [PROGRESS.md](PROGRESS.md)):
 
 1. PostgreSQL 16 + pgvector schema, migrations, test harness, durable claims with generation fencing.
 2. All eight fixed mock tools with seeded, configurable failure behaviour.
@@ -19,8 +19,11 @@ Stages 1–4 of the 8-stage build plan are done (see [PROGRESS.md](PROGRESS.md))
    code-resolved dates and ranking, code templates for every consequential message, grounding
    checks, untrusted-data isolation, bounded retries and a degraded menu, all tested offline with
    a scripted model.
+5. Persistent memory (explicit vs inferred, inspect/correct/forget) and context management: a fixed
+   4,096-byte context cap with a drop order, relevance-ranked memories behind SQL hard filters, and
+   a hostile 50+ memory seed that proves only relevant, current, confirmed facts reach the model.
 
-Memory/context, background workers, trace export/eval table and the CLI are not built yet. Real bugs found so far are in [docs/BUGS.md](docs/BUGS.md).
+Background workers, trace export/eval table and the CLI are not built yet. Real bugs found so far are in [docs/BUGS.md](docs/BUGS.md).
 
 ## Layout
 
@@ -30,6 +33,7 @@ Memory/context, background workers, trace export/eval table and the CLI are not 
 | `errand_agent/mocks/` | Seeded provider catalog and the Postgres-backed mock backend |
 | `errand_agent/tools/` | The eight tool contracts (Pydantic models) and `ToolClient` |
 | `errand_agent/llm/` | Model types, scripted model, ModelMux adapter, validated tool calls, grounding |
+| `errand_agent/memory/` | Typed memory facts, store (lifecycle, filtered retrieval), embedders, seed data |
 | `errand_agent/workflow/` | Agent, state machine, approval gate, executor, budgets, recovery, parsing, ranking, templates |
 | `tests/` | Invariant and contract tests against real Postgres |
 
@@ -100,6 +104,25 @@ replaced the original local-Ollama plan by the developer's decision (DECISIONS �
 - **Measured so far.** Codex (`gpt-6.1-sol`), two runs on 2026-11-07: 3/3 flows completed, 24/24 tool
   calls valid on the first attempt, no booking without approval, median call latency about 5.5 s.
   Claude has not been measured yet.
+
+## Memory and embeddings
+
+Saved preferences (preferred area, earliest acceptable time, a preferred provider per service,
+short notes) are stored in PostgreSQL with their pgvector embeddings in the same row. Embeddings
+come from a local [Ollama](https://ollama.com) running only `nomic-embed-text:v1.5`; chat stays on
+ModelMux. Automated tests never need Ollama: they use deterministic or recorded fixture vectors.
+
+```bash
+docker compose --profile embed up -d --wait ollama                      # image pinned by digest (3.4 GB once)
+docker compose exec ollama ollama pull nomic-embed-text:v1.5            # ~274 MB once; then fully offline
+docker compose exec ollama ollama list                                  # copy the model digest into .env:
+# ERRAND_EMBED_DIGEST=<full sha256>  (a different installed build is then refused)
+```
+
+Users manage memory with plain commands that never go to the model: `show memories`,
+`forget memory 3`, `forget my area`, `confirm memory 2` (for a suggestion learned from bookings),
+`correct memory 1: Koramangala`. "Remember …" in a normal message saves a preference only when the
+user's own words ask for it.
 
 ## Configuration
 

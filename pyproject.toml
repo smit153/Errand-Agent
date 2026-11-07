@@ -49,7 +49,8 @@ packages = ["errand_agent", "tests"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-ra --strict-markers"
+addopts = "-ra --strict-markers -m 'not ollama'"
 markers = [
     "invariant: safety-critical invariant test (approval, idempotency, recovery, guardrails)",
+    "ollama: needs a local Ollama with the pinned embedding model; deselected by default, run with -m ollama",
 ]

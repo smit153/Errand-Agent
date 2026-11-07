@@ -286,7 +286,7 @@ This table covers PDF §§1–5, including individual failure modes and delivera
 | §5 3–5 minute full-booking demo, chat/trace side by side | §§8,13,15 | E45 recording duration/content review; live failure desirable |
 | §5 coding-assistant transcript | §§13,15 | E45 retained/exported conversation artifact |
 
-## 15. Risk-ordered build plan — approved; stages 1–4 done, stage 5 in progress (see PROGRESS.md)
+## 15. Risk-ordered build plan — approved; stages 1–5 done (see PROGRESS.md)
 
 Each numbered stage is split into reviewable tasks. Run its acceptance checks before proceeding; update PROGRESS.md and HANDOFF.md after every task. Tracing hooks and minimal journal events start with persistence/recovery even though the full exporter/eval report is stage 7. Use direct workflow/test harness calls until stage 8; no UI dependency blocks safety validation.
 
@@ -349,6 +349,8 @@ No application files, Compose configuration, database, model downloads or tests 
 | Untrusted review excerpts, ≤ 300 characters each (dropped first) | ≤ 900 |
 | Reserve for one retry diagnostic (problem excerpt ≤ 300 bytes) | 600 |
 | **Total cap per physical request** | **4,096** |
+
+**Embedder installed and the threshold calibrated (stage 5d, 2026-11-08).** Ollama 0.40.11 (`ollama/ollama@sha256:dea72d1e…`, a 3.37 GB compressed image the user approved after being told the size) runs on loopback with `nomic-embed-text:v1.5`, installed digest `0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f` (274 MB), pinned in `ERRAND_EMBED_DIGEST`; a different build is refused and facts embedded by another build are re-embedded, never compared. Real vectors for 5 queries and 23 labeled documents are checked in (`tests/fixtures/nomic_vectors.json`). On them, every pair scores at least 0.34 (nomic has a high baseline), so the 0.30 hypothesis filtered nothing. **Minimum cosine frozen at 0.45**: it keeps 19/19 relevant facts and drops 15/20 unrelated global notes, and still keeps "Preferred area: Indiranagar" (0.623) for an Indiranagar query. The margin to the lowest relevant score (0.465) is only 0.015; other-service facts can score up to 0.558, but those are already excluded by the scope filter, and top-6 plus the 700-byte memory budget bound the rest. E43 (`-m ollama`) checks the pinned digest, dimension, prefixes and that live vectors match the fixtures (cosine above 0.999).
 
 **Measured gateway overhead is outside the cap and is stated, not hidden.** ModelMux adds its own CLI system prompt and tool-calling framing: in the Codex smoke test, a 251-byte phrase request was reported as 4,532 prompt tokens, and the app's own content peaked at 1,922 bytes. The provider-reported `prompt_tokens` stays in every model-call trace. The cap claims only what the app controls. The 768 output cap remains unenforceable through ModelMux (§17).
 

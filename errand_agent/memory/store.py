@@ -51,7 +51,7 @@ Outcome = Literal["saved", "pending_embedding", "unchanged", "forgotten", "not_f
 
 LOCK_NAMESPACE = 0x6D656D6F  # "memo": two-key advisory locks never collide with one-key session locks
 TOP_K = 6
-MIN_SCORE = 0.30
+MIN_SCORE = 0.45  # calibrated on recorded nomic-embed-text vectors (DECISIONS §18); was a 0.30 hypothesis
 INFER_WINDOW = 3  # the last three completed bookings
 INFER_EARLIEST_FLOOR_HOUR = 9  # an "earliest time" below 09:00 says nothing useful
 _COLUMNS = (

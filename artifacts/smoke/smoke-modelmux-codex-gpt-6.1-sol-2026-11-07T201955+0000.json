@@ -1,0 +1,129 @@
+{
+  "when": "2026-11-07T20:19:55+00:00",
+  "model": "modelmux:codex:gpt-6.1-sol",
+  "memory": "on (ollama:nomic-embed-text:v1.5@0a109f422b47)",
+  "flows": [
+    {
+      "flow": "plumber",
+      "session_id": 1,
+      "passed": true,
+      "final_state": "completed",
+      "seconds": 49.67,
+      "turns": [
+        {
+          "user": "Find a plumber for my kitchen tap this week, mornings only, under ₹1,500.",
+          "state": "collecting",
+          "reply": [
+            "Which area would you prefer?"
+          ],
+          "seconds": 18.0
+        },
+        {
+          "user": "Indiranagar",
+          "state": "awaiting_approval",
+          "reply": [
+            "Best plumber options (Fri 06 Nov–Sun 08 Nov; mornings only; up to ₹1,499), cheapest first:\n  1. Lokesh Plumbing (PLU-IND-03) — Fri 6 Nov, 11:00 AM — ₹550 — ★4.4\n  2. Tarun Plumbing (PLU-IND-06) — Fri 6 Nov, 10:00 AM — ₹600 — ★4.5\n  3. Pooja Plumbing (PLU-IND-04) — Fri 6 Nov, 9:00 AM — ₹850 — ★3.6",
+            "Please confirm this booking (revision 1):\n  Service:  plumber\n  Provider: Lokesh Plumbing (PLU-IND-03)\n  Slot:     Fri 6 Nov, 11:00 AM\n  Price:    ₹550 (held quote)\n  Hold expires: Fri 6 Nov, 8:10 AM\nReply 'yes' or 'confirm REAT8K' to approve exactly this. Anything else changes nothing."
+          ],
+          "seconds": 25.87
+        },
+        {
+          "user": "yes",
+          "state": "completed",
+          "reply": [
+            "Booked and verified with the provider system: Lokesh Plumbing for plumber on Fri 6 Nov, 11:00 AM at ₹550. Booking ID BK-000002."
+          ],
+          "seconds": 5.79
+        }
+      ]
+    },
+    {
+      "flow": "ac_reschedule",
+      "session_id": 2,
+      "passed": true,
+      "final_state": "completed",
+      "seconds": 26.91,
+      "turns": [
+        {
+          "user": "Move my AC servicing to Saturday.",
+          "state": "awaiting_approval",
+          "reply": [
+            "Open slots with Harish Cooling Care:\n  1. Harish Cooling Care (ACS-IND-01) — Sat 7 Nov, 11:00 AM — ₹1,850 — ★4.4\n  2. Harish Cooling Care (ACS-IND-01) — Sat 7 Nov, 1:00 PM — ₹1,850 — ★4.4\n  3. Harish Cooling Care (ACS-IND-01) — Sat 7 Nov, 4:00 PM — ₹1,850 — ★4.4",
+            "Please confirm this reschedule (revision 1):\n  Booking:  BK-H0002 — AC servicing\n  Provider: Harish Cooling Care (ACS-IND-01)\n  From:     Sun 8 Nov, 11:00 AM\n  To:       Sat 7 Nov, 11:00 AM\nReply 'yes' or 'confirm 8Y2MYU' to approve exactly this. Anything else changes nothing."
+          ],
+          "seconds": 20.17
+        },
+        {
+          "user": "yes",
+          "state": "completed",
+          "reply": [
+            "Rescheduled and verified: booking BK-H0002 with Harish Cooling Care moved from Sun 8 Nov, 11:00 AM to Sat 7 Nov, 11:00 AM."
+          ],
+          "seconds": 6.74
+        }
+      ]
+    },
+    {
+      "flow": "same_electrician",
+      "session_id": 3,
+      "passed": true,
+      "final_state": "completed",
+      "seconds": 55.13,
+      "turns": [
+        {
+          "user": "Book the same electrician as last time, but not before 10 a.m.",
+          "state": "collecting",
+          "reply": [
+            "Last time you used Jatin Electricals (ELE-IND-01); I'll look for them again.",
+            "What date do you have in mind, and what’s your budget?"
+          ],
+          "seconds": 22.05
+        },
+        {
+          "user": "Tomorrow, no budget.",
+          "state": "awaiting_approval",
+          "reply": [
+            "Best electrician options (Sat 07 Nov; not before 10 a.m.; no budget limit; with Jatin Electricals), cheapest first:\n  1. Jatin Electricals (ELE-IND-01) — Sat 7 Nov, 11:00 AM — ₹1,050 — ★3.6",
+            "Please confirm this booking (revision 1):\n  Service:  electrician\n  Provider: Jatin Electricals (ELE-IND-01)\n  Slot:     Sat 7 Nov, 11:00 AM\n  Price:    ₹1,050 (held quote)\n  Hold expires: Fri 6 Nov, 8:10 AM\nReply 'yes' or 'confirm MQF4BV' to approve exactly this. Anything else changes nothing."
+          ],
+          "seconds": 27.54
+        },
+        {
+          "user": "yes",
+          "state": "completed",
+          "reply": [
+            "Booked and verified with the provider system: Jatin Electricals for electrician on Sat 7 Nov, 11:00 AM at ₹1,050. Booking ID BK-000004."
+          ],
+          "seconds": 5.53
+        }
+      ]
+    }
+  ],
+  "calls": {
+    "logical_calls": 24,
+    "physical_calls": 24,
+    "first_pass_valid_rate": 1.0,
+    "after_retries_valid_rate": 1.0,
+    "latency_ms": {
+      "mean": 5368.2,
+      "median": 5267.5,
+      "max": 8466.4
+    },
+    "by_purpose": {
+      "act": 17,
+      "extract": 5,
+      "phrase": 2
+    },
+    "problems": [],
+    "ignored_params": [
+      "max_tokens",
+      "seed",
+      "temperature"
+    ]
+  },
+  "invariants": {
+    "bookings_created": 2,
+    "approved_book_operations": 2,
+    "no_booking_without_approval": true
+  }
+}
