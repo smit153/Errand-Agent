@@ -331,6 +331,7 @@ No application files, Compose configuration, database, model downloads or tests 
 - *Output cap:* the 768-token output cap can't be enforced through ModelMux, so it is not claimed. Every reply is still bounded by validation, and phrased text by grounding.
 - *Cost:* usage tokens are recorded when ModelMux reports them. Cost is "unavailable: subscription-billed via ModelMux"; it is not fabricated.
 - *E42 (revised):* the three-example smoke test runs through ModelMux against seeded mocks and an injected clock. It records the first-pass and after-retry valid-call rates, latency per call and per flow, and the provider/model used. The user performs `modelmux login`; the agent never handles credentials.
+- *E42 measured (Codex, 2026-11-07):* two runs on `modelmux:codex:gpt-6.1-sol` each completed 3/3 PDF flows with 24/24 calls valid on the first pass, no booking without approval, per-call latency median ≈5.5 s (max 9.7 s) and 27–58 s per flow. Two runs are a smoke check, not a reliability estimate; unseeded real-model behaviour can vary. Claude is not yet measured (not logged in).
 - *Removed:* the Ollama chat adapter, which is superseded. The local-only URL check moves to the ModelMux adapter.
 
 **Open, to decide at stage 5 (the user will be asked).** (1) The *embedding backend*: v2 §5 chose Ollama `nomic-embed-text`, but ModelMux offers no embeddings endpoint. (2) *Token accounting* for the 4,096-token input cap: there is no local tokenizer for hosted Claude/Codex models, and DECISIONS §3 forbids silent chars-per-token assumptions.

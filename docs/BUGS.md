@@ -79,3 +79,19 @@ test now guards against regression. Entries are added as bugs are encountered, n
 - **Fix:** "status" replies and returns early with the menu still active; only acting items clear it.
 - **Regression test:** the test above picks "2" (status) and then completes the request via `area: …`
   without any extraction call.
+
+## BUG-006 — the smoke runner read the wrong ModelMux key variable
+
+- **Found:** 2026-11-07, stage 4d-b, on the first real run of `scripts/smoke.sh codex`
+  (`no MODELMUX_API_KEY in ~/.config/modelmux/secrets.env`).
+- **What broke:** the real-model smoke test could not start. Nothing reached the model, and no key
+  was printed.
+- **Why:** the script assumed the variable was `MODELMUX_API_KEY`. ModelMux actually writes exactly
+  one line, `MODELMUX_API_KEYS=<base64url, ≥ 32 chars>` (modelmux-cli `secretsStore.js`). This was
+  written from memory of the docs, not checked against the CLI's source.
+- **Fix:** key extraction moved to `scripts/modelmux_key.sh`, which accepts only that exact
+  one-line format and rejects anything else with an error that never echoes the file.
+  `smoke.sh` calls it.
+- **Regression test:** `tests/test_smoke_scripts.py` feeds fake secrets files: the real format is
+  read; the singular name, a short value, extra lines, a quoted value and an empty file are rejected
+  with no output and the key absent from stderr.

@@ -1,8 +1,10 @@
 # Handoff
 
-## Current checkpoint — stage 4 in progress (2026-11-07)
+## Current checkpoint — stage 4 done for Codex (2026-11-07)
 
-User said "continue to stage 4". Done: 4a parsing/ranking, 4b model layer (`errand_agent/llm/`), 4c agent (`workflow/agent.py` + `agent_tools.py` + `request.py`, migration 0003) with 21 scripted scenarios; 256 tests pass. 4d: the user chose to REPLACE Ollama with their ModelMux gateway (both providers configurable); DECISIONS §17 records it, including the PDF §1 risk. Adapter + factory + smoke runner done (260 tests). Next: the user runs `modelmux login claude` / `modelmux login codex` in their own terminal, then run `scripts/smoke.sh <provider>` (from a docker-group shell) and record results in PROGRESS/DECISIONS. Before stage 5, ask the user about the embedding backend and token accounting (see PROGRESS open items). Then continue with stage 5 per the build plan unless the user says otherwise. Commits: no AI attribution lines.
+Stage 4a–4d done. 4d-b smoke (E42 revised) measured on Codex (`modelmux:codex:gpt-6.1-sol`), two runs: 3/3 flows completed, 24/24 calls valid first pass, median call ≈5.5 s; see PROGRESS 4d-b and `artifacts/smoke/`. BUG-006 (smoke runner read `MODELMUX_API_KEY`; ModelMux writes `MODELMUX_API_KEYS`) fixed via `scripts/modelmux_key.sh` + `tests/test_smoke_scripts.py`; 266 tests pass. Claude provider not logged in; run `scripts/smoke.sh claude` after the user logs in. Never read, print or inspect the gateway key (the auto-mode classifier also blocks it); only `modelmux_key.sh` touches it, inside a command substitution. Docker from this shell: `wsl.exe --distribution Ubuntu --user laptop --cd <repo> --exec bash -c '...'`.
+
+Next: ask the user the two stage-5 decisions (embedding backend: ModelMux has no embeddings endpoint; token accounting for the 4,096-token input cap: no local tokenizer for Claude/Codex), then build stage 5 (memory, embeddings, context). Commits: no AI attribution lines.
 
 ## Earlier checkpoint — stages 1–3 done and reviewed; pre-stage-4 requests handled (2026-11-07)
 

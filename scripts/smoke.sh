@@ -6,10 +6,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 provider="${1:-claude}"
 case "$provider" in claude|codex) ;; *) echo "usage: scripts/smoke.sh [claude|codex]" >&2; exit 2 ;; esac
-secrets="$HOME/.config/modelmux/secrets.env"
-[ -r "$secrets" ] || { echo "cannot read $secrets: run 'modelmux up' and 'modelmux login $provider' first" >&2; exit 2; }
-ERRAND_MODELMUX_API_KEY="$(sed -n 's/^MODELMUX_API_KEY=//p' "$secrets")"
-[ -n "$ERRAND_MODELMUX_API_KEY" ] || { echo "no MODELMUX_API_KEY in $secrets" >&2; exit 2; }
+ERRAND_MODELMUX_API_KEY="$(scripts/modelmux_key.sh "$HOME/.config/modelmux/secrets.env")"
 export ERRAND_MODELMUX_API_KEY ERRAND_MODELMUX_PROVIDER="$provider"
 docker compose --profile dev build -q dev
 # Host networking so the container reaches ModelMux and Postgres on this machine's loopback.

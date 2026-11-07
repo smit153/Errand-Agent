@@ -97,6 +97,9 @@ replaced the original local-Ollama plan by the developer's decision (DECISIONS Â
   `scripts/smoke.sh claude`. It runs the three example requests from the brief and writes a report to
   `artifacts/smoke/`. The script reads the gateway key from `~/.config/modelmux/secrets.env` and passes
   it by environment variable; it is never committed, logged or traced.
+- **Measured so far.** Codex (`gpt-6.1-sol`), two runs on 2026-11-07: 3/3 flows completed, 24/24 tool
+  calls valid on the first attempt, no booking without approval, median call latency about 5.5 s.
+  Claude has not been measured yet.
 
 ## Configuration
 
