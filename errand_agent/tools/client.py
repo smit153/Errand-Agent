@@ -137,7 +137,7 @@ class ToolClient:
                     at=self._clock.now(),
                     run_id=ctx.run_id,
                     session_id=ctx.session_id,
-                    operation_id=ctx.fence.operation_id if ctx.fence else None,
+                    operation_id=ctx.fence.operation_id if ctx.fence else ctx.operation_id,
                 )
         except Exception:
             # Tracing must never change a tool's outcome; record the failure loudly instead.

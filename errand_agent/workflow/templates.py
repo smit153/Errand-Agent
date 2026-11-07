@@ -91,3 +91,77 @@ NO_CARD = "There's nothing waiting for your approval right now, so I haven't tak
 CODE_MISMATCH = "That confirmation code doesn't match the details I showed you, so I haven't taken any action."
 NOT_OWNER = "That confirmation doesn't belong to this conversation, so I haven't taken any action."
 INVALIDATED = "Those details are no longer current, so I haven't taken any action. Please review the latest details."
+
+
+# ---------------------------------------------------------------------- execution outcomes
+_ACTION_NOUN = {"book": "booking", "cancel": "cancellation", "reschedule": "reschedule"}
+
+PROPOSAL_REJECTED = (
+    "I didn't act on that: the proposed action didn't exactly match what you approved, so nothing was sent."
+)
+AWAITING_PROPOSAL = "Your approval is recorded, but I haven't sent anything yet."
+
+
+def booking_confirmed(snap: BookSnapshot, booking_id: str) -> str:
+    return (
+        f"Booked and verified with the provider system: {snap.provider_name} for {service_label(snap.service)} "
+        f"on {when(snap.slot)} at {money(snap.price_inr)}. Booking ID {booking_id}."
+    )
+
+
+def cancelled(snap: CancelSnapshot) -> str:
+    return f"Cancelled and verified: booking {snap.booking_id} with {snap.provider_name} on {when(snap.slot)}."
+
+
+def rescheduled(snap: RescheduleSnapshot) -> str:
+    return (
+        f"Rescheduled and verified: booking {snap.booking_id} with {snap.provider_name} moved from "
+        f"{when(snap.old_slot)} to {when(snap.slot)}."
+    )
+
+
+def retry_scheduled(action: str) -> str:
+    return (
+        f"The provider system is temporarily unavailable, so the {_ACTION_NOUN.get(action, action)} hasn't gone "
+        "through yet. I'll retry automatically with the same request, so it can't be applied twice."
+    )
+
+
+def pending_verification(action: str, limit: str | None = None) -> str:
+    stop = f" I stopped because a safety limit was reached ({limit})." if limit else ""
+    return (
+        f"I couldn't confirm whether the {_ACTION_NOUN.get(action, action)} went through, so I'm not reporting it "
+        f"as done or as failed.{stop} I won't repeat it until I've checked with the provider system."
+    )
+
+
+def limit_not_done(action: str, limit: str, *, dispatched: bool) -> str:
+    sent = "I checked with the provider system and" if dispatched else "Nothing was sent, and"
+    return (
+        f"I stopped because a safety limit was reached ({limit}). {sent} the "
+        f"{_ACTION_NOUN.get(action, action)} has not been made. Any new attempt needs your fresh approval."
+    )
+
+
+_REASONS = {
+    "slot_taken": "someone else took that slot before it could be confirmed",
+    "slot_conflict": "that new slot isn't available",
+    "retries_exhausted": "the provider system kept failing after the allowed retries",
+    "cancelled_by_provider": "the provider had already cancelled this booking",
+    "completed": "the booking has already been completed",
+    "cancelled": "the booking was already cancelled",
+    "hold_not_active": "the slot hold is no longer active",
+    "not_found": "the provider system doesn't recognise it",
+}
+
+
+def not_done(action: str, snap: Snapshot, code: str) -> str:
+    reason = _REASONS.get(code, f"the provider system refused it ({code})")
+    if action == "book":
+        tail = "Nothing was booked. I can look for other options; any new booking needs your approval."
+    elif action == "cancel":
+        tail = f"Booking {getattr(snap, 'booking_id', '')} was not cancelled by me."
+    else:
+        old = when(snap.old_slot) if isinstance(snap, RescheduleSnapshot) else "its original time"
+        tail = f"Your booking is unchanged at {old}. Any alternative needs your fresh approval."
+    return f"I couldn't complete the {_ACTION_NOUN.get(action, action)}: {reason}. {tail}"

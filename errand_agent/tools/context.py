@@ -27,4 +27,5 @@ class ToolContext(BaseModel):
     user_id: str
     session_id: int
     run_id: UUID | None = None
+    operation_id: UUID | None = None  # trace correlation for non-fenced calls (e.g. reconciliation)
     fence: Fence | None = None

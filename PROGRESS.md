@@ -18,7 +18,7 @@
 
 ## Stage 3 — approval + journal + booking recovery (in progress)
 - [x] 3a Explicit state machine (validated, CAS-versioned, traced transitions); immutable snapshot revisions (one pending per session, identical re-propose is idempotent, blocked while an operation is unresolved); display receipts issued only when code renders the card; `yes` / `confirm <token>` bound to the receipt's still-pending revision; stale/superseded → specific material-change explanation, never transferred; expired hold → template; atomic approval + operation + stable key; duplicates return the same operation (also after restart and under 5-way concurrency). Tests: 35 new, 103 total.
-- [ ] 3b Executor: stable keys, attempt reservations, run/lifetime budgets, exact-snapshot dispatch (G7).
+- [x] 3b Executor: G7 exact-snapshot check (wrong tool/hold/key, extra or missing args → rejected, zero effect) then dispatch from the stored snapshot; durable attempt reservation with fence before each call; forced get_booking_status after every book (list_bookings for cancel/reschedule); same-key retry only after a verified "not done"; lifetime caps (3 dispatches/6 reconciliations) and run caps (tool calls, 300 s deadline) end with truthful outcomes (unknown → pending_verification, never claimed); cancel 503 → durable retry_wait + job row, same-key retry when due. Migration 0002. Real bugs BUG-001..003 logged in docs/BUGS.md with regression tests. Tests: 126 passed.
 - [ ] 3c Forced timeout reconciliation, repeated-confirmation replay, crash points/recovery, two-worker races.
 
 ## Environment notes

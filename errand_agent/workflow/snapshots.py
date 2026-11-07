@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from datetime import UTC, datetime
 from typing import Annotated, Any, Literal
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, TypeAdapter
@@ -59,3 +60,16 @@ SNAPSHOT: TypeAdapter[BookSnapshot | CancelSnapshot | RescheduleSnapshot] = Type
 def snapshot_hash(snapshot: BookSnapshot | CancelSnapshot | RescheduleSnapshot) -> str:
     canonical = json.dumps(snapshot.model_dump(mode="json"), sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(canonical.encode()).hexdigest()
+
+
+def normalize_arg(value: Any) -> Any:
+    """Canonical form for comparing proposed vs approved arguments (aware datetimes → UTC ISO)."""
+    if isinstance(value, datetime):
+        return value.astimezone(UTC).isoformat() if value.tzinfo else value.isoformat()
+    if isinstance(value, str):
+        try:
+            parsed = datetime.fromisoformat(value)
+        except ValueError:
+            return value
+        return parsed.astimezone(UTC).isoformat() if parsed.tzinfo else value
+    return value
