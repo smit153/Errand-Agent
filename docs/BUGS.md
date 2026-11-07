@@ -95,3 +95,38 @@ test now guards against regression. Entries are added as bugs are encountered, n
 - **Regression test:** `tests/test_smoke_scripts.py` feeds fake secrets files: the real format is
   read; the singular name, a short value, extra lines, a quoted value and an empty file are rejected
   with no output and the key absent from stderr.
+
+## BUG-007 — a retry job couldn't schedule its own continuation
+
+- **Found:** 2026-11-08, stage 6a, while wiring the job worker to the executor (review of the
+  retry path), then pinned by a test.
+- **What broke:** when a background cancel retry hit another transient 503, the executor tried
+  to queue the next retry, but the job running it was still claimed and counted as "an open retry
+  job for this operation". No continuation was queued, so the operation would have sat in
+  `retry_wait` with nothing left to run it. The same applied to a reconcile job re-queuing itself.
+- **Why:** de-duplication ("one open job per kind and operation") didn't distinguish the running
+  job from a genuinely separate open one.
+- **Fix:** `queue.enqueue(..., handover_from=holder)` closes the caller's own claimed job of the
+  same kind for that operation and inserts its successor in the same transaction as the state
+  change. As a safety net, the worker re-queues a retry for any operation it leaves in
+  `retry_wait` without one.
+- **Regression test:** `tests/test_jobs.py::test_bug007_a_second_503_hands_over_to_a_second_retry`
+  (two 503s → second retry queued and run → succeeded with exactly 3 dispatches, no open jobs left).
+
+## BUG-008 — a status-service outage burned the whole reconciliation allowance at once
+
+- **Found:** 2026-11-08, stage 6a, by `test_pending_verification_is_followed_up_until_resolved`
+  (no follow-up job was queued after a booking timeout).
+- **What broke:** after a booking timeout with `get_booking_status` failing, the executor's loop
+  re-checked immediately until all 6 lifetime reconciliations were spent, within milliseconds.
+  Nothing was left for a later check, so a brief status outage left a possibly-made booking
+  unverified for good (truthfully "pending", but needlessly).
+- **Why:** a failed status check set `pending_verification`, and the drive loop treats that state
+  as "reconcile now", with no per-drive bound other than the lifetime cap.
+- **Fix:** at most 2 failed status checks per drive (`STATUS_FAILURES_PER_DRIVE`); the drive then
+  stops with a pending outcome and a reconcile job is queued 30 s later, until the lifetime cap.
+  The final "still can't confirm" notice is sent when follow-ups stop.
+- **Regression tests:** `tests/test_executor.py::test_status_service_down_exhausts_reconciliations_and_stays_pending`
+  (2 checks per drive, a follow-up queued, 6 in total across drives) and
+  `tests/test_jobs.py::test_pending_verification_is_followed_up_until_resolved` /
+  `test_follow_ups_stop_at_the_lifetime_limit_and_say_so`.

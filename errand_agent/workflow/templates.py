@@ -447,3 +447,20 @@ _REMEMBER_REASONS = {
     "earliest time": "this request has no earliest time (for example 'not before 10 a.m.')",
     "provider": "no provider is chosen for this request yet",
 }
+
+
+# ------------------------------------------------------------------ background notifications (stage 6)
+OFFER_GONE = "That offer is no longer available, so it can't be approved. Message me to look again."
+
+
+def background_outcome(message: str) -> str:
+    """An operation finished while you were away; the outcome text itself is the code template."""
+    return f"Update on your earlier request: {message}"
+
+
+def still_pending(action: str) -> str:
+    noun = _ACTION_NOUN.get(action, action)
+    return (
+        f"Update on your earlier {noun}: I still can't confirm whether it went through, and I've stopped "
+        "checking automatically. Nothing will be retried without verification. Ask me for its status any time."
+    )

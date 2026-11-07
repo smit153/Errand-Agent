@@ -329,9 +329,24 @@ def test_status_service_down_exhausts_reconciliations_and_stays_pending(h: Harne
     snap = book_snapshot(h.tools, h.ctx)
     op_id = h.approve(snap)
     h.backend.configure(ScenarioConfig(book_outcomes=["timeout_booked"], status_failures=50))
-    out = h.executor.execute(h.run(), op_id, book_call(snap))
+    run = h.run()
+    out = h.executor.execute(run, op_id, book_call(snap))
     assert out.status == "pending_verification"
     assert not out.verified
+    op = h.op(op_id)
+    # BUG-008: a failing status service no longer burns the whole lifetime allowance in one tight
+    # loop; two checks per drive, then a delayed follow-up job, up to the lifetime cap of six.
+    assert op["reconcile_count"] == 2
+    assert (
+        count(
+            h.db,
+            "SELECT count(*) FROM jobs WHERE operation_id = %s AND kind = 'operation_reconcile' AND status = 'pending'",
+            (op_id,),
+        )
+        == 1
+    )
+    for _ in range(5):
+        h.executor.resume(run, op_id)
     op = h.op(op_id)
     assert op["reconcile_count"] == 6
     assert op["dispatch_count"] == 1  # never retried blind

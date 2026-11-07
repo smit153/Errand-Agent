@@ -1,12 +1,12 @@
 # Handoff
 
-## Current checkpoint — stage 5 done (2026-11-08)
+## Current checkpoint — stage 6 in progress (2026-11-08)
 
 Stages 1–5 done; 364 offline tests + 2 live Ollama tests (`-m ollama`) pass. Stage 5: memory store (migration 0004, lifecycle as DB checks), agent integration (code-handled memory commands, cue-checked "remember", per-turn defaults, inferred suggestions), 4,096-byte context builder with drop order, hostile 50+ memory seed (E21/E22), real Ollama embedder (0.40.11 + nomic digest pinned), threshold calibrated to 0.45 on recorded real vectors. Codex smoke with memory on passes 3/3.
 
 Running things from this shell: Docker via `wsl.exe --distribution Ubuntu --user laptop --cd <repo> --exec bash -c '...'`. Ollama: `docker compose --profile embed up -d --wait ollama`. Live E43: `docker compose --profile dev run --rm -T -e ERRAND_EMBED_URL=http://ollama:11434 dev pytest -m ollama`. Never read or print the ModelMux key; only `scripts/modelmux_key.sh` touches it. Claude provider is still not logged in.
 
-Next: stage 6 (jobs/retry worker, cancel-503 retry via the queue, provider-cancellation watcher with replacement search within known preferences and fresh approval, outbox), plus open items in PROGRESS. Commits: no AI attribution lines.
+Stage 6a (job worker, durable dispatch job, retries/reconcile follow-ups, outbox; BUG-007/008) done; 375 tests. Next: 6b provider-cancellation watcher (see PROGRESS plan), then 6c runner loop. Commits: no AI attribution lines.
 
 ## Earlier checkpoint — stages 1–3 done and reviewed; pre-stage-4 requests handled (2026-11-07)
 

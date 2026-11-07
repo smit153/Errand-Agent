@@ -10,6 +10,10 @@ Invariants (DECISIONS §§1, 2, 9, 11, 12-G7):
   book (forced after every dispatch, including timeouts), list_bookings for cancel/reschedule.
 - A same-key retry happens only after the authoritative check says the effect did not happen.
 - Every exit returns an ExecutionOutcome with a code-rendered message; unknown stays unknown.
+- Once the model's proposal passes the snapshot check, the same transaction records it and
+  creates an `operation_execute` job claimed by this run. If the process dies mid-dispatch, the
+  claim expires and a background worker resumes the operation (reconciling first) without asking
+  the model again; continuations (retries, reconciliation) are queued jobs too.
 """
 
 from __future__ import annotations
@@ -23,7 +27,7 @@ from psycopg import sql
 from psycopg.types.json import Jsonb
 from pydantic import BaseModel, ConfigDict
 
-from errand_agent import trace
+from errand_agent import queue, trace
 from errand_agent.claims import verify_claim
 from errand_agent.clock import Clock
 from errand_agent.db import Conn, Database, fetch_one
@@ -56,6 +60,9 @@ TERMINAL: frozenset[str] = frozenset({"succeeded", "failed"})
 AnySnapshot = BookSnapshot | CancelSnapshot | RescheduleSnapshot
 DispatchEffect = Literal["returned", "no_effect", "rejected", "unknown"]
 ExecFault = Callable[[str, UUID], None]  # (point, operation_id); may raise to simulate a crash
+EXECUTE_LEASE_MARGIN = timedelta(seconds=30)
+RECONCILE_DELAY = timedelta(seconds=30)
+STATUS_FAILURES_PER_DRIVE = 2  # back-to-back failed status checks before waiting for a queued follow-up (BUG-008)
 MAX_STEPS = 32  # loop guard; real bounds are the lifetime/run caps
 ORPHAN_CHARGE_CAP_MS = 60_000  # a crashed call is charged at most the per-call bound
 
@@ -99,6 +106,7 @@ class _Op(BaseModel):
     dispatch_count: int
     reconcile_count: int
     next_retry_at: datetime | None
+    proposal_checked_at: datetime | None = None
 
 
 class OperationExecutor:
@@ -123,12 +131,13 @@ class OperationExecutor:
     def execute(self, run: Run, operation_id: UUID, proposal: ProposedCall) -> ExecutionOutcome:
         """Validate the model's proposed call against the approved snapshot, then drive the operation."""
         now = self._clock.now()
+        job_id: UUID | None = None
         with self._db.session_txn(run.session_id) as conn:
             self._verify(conn, run, now)
             op = _load(conn, operation_id, run.session_id)
             if op.status in TERMINAL:
                 return _stored(op)
-            if op.status == "approved":
+            if op.status == "approved" and op.proposal_checked_at is None:
                 problem = check_proposal(op.action, op.snapshot, op.idempotency_key, proposal)
                 trace.record(
                     conn,
@@ -147,17 +156,32 @@ class OperationExecutor:
                         message=templates.PROPOSAL_REJECTED,
                         verified=False,
                     )
-        return self._drive(run, operation_id)
+                conn.execute("UPDATE operations SET proposal_checked_at = %s WHERE id = %s", (now, op.id))
+                job_id = queue.enqueue(
+                    conn,
+                    kind="operation_execute",
+                    session_id=run.session_id,
+                    operation_id=op.id,
+                    due_at=now,
+                    now=now,
+                    claimed_by=run.claim.holder,
+                    claim_expires_at=run.deadline_at + EXECUTE_LEASE_MARGIN,
+                )
+        outcome = self._after_drive(run, self._drive(run, operation_id))
+        if job_id is not None:
+            with self._db.txn() as conn:
+                queue.finish(conn, job_id, holder=run.claim.holder, now=self._clock.now())
+        return outcome
 
     def resume(self, run: Run, operation_id: UUID) -> ExecutionOutcome:
         """Continue an already-validated operation (due retry, recovery). Never re-asks the model.
 
-        An operation still `approved` has not passed the snapshot check, so it is not dispatched.
+        An `approved` operation whose proposal never passed the snapshot check is not dispatched.
         """
         with self._db.session_txn(run.session_id) as conn:
             self._verify(conn, run, self._clock.now())
             op = _load(conn, operation_id, run.session_id)
-        if op.status == "approved":
+        if op.status == "approved" and op.proposal_checked_at is None:
             return ExecutionOutcome(
                 operation_id=op.id,
                 status="approved",
@@ -165,10 +189,45 @@ class OperationExecutor:
                 message=templates.AWAITING_PROPOSAL,
                 verified=False,
             )
-        return self._drive(run, operation_id)
+        return self._after_drive(run, self._drive(run, operation_id))
+
+    def _after_drive(self, run: Run, outcome: ExecutionOutcome) -> ExecutionOutcome:
+        """An unresolved outcome always has a queued follow-up while lifetime allowance remains."""
+        if outcome.status != "pending_verification":
+            return outcome
+        now = self._clock.now()
+        with self._db.session_txn(run.session_id) as conn:
+            row = fetch_one(
+                conn, "SELECT reconcile_count, active_ms FROM operations WHERE id = %s", (outcome.operation_id,)
+            )
+            if (
+                row is not None
+                and row["reconcile_count"] < self._limits.reconciliations
+                and row["active_ms"] < self._limits.active_seconds * 1000
+            ):
+                queued = queue.enqueue(
+                    conn,
+                    kind="operation_reconcile",
+                    session_id=run.session_id,
+                    operation_id=outcome.operation_id,
+                    due_at=now + RECONCILE_DELAY,
+                    now=now,
+                    handover_from=run.claim.holder,
+                )
+                trace.record(
+                    conn,
+                    "operation.reconcile_scheduled",
+                    {"job_id": str(queued) if queued else None, "due_at": (now + RECONCILE_DELAY).isoformat()},
+                    at=now,
+                    run_id=run.id,
+                    session_id=run.session_id,
+                    operation_id=outcome.operation_id,
+                )
+        return outcome
 
     # ================================================================== main loop
     def _drive(self, run: Run, operation_id: UUID) -> ExecutionOutcome:
+        status_failures = 0
         try:
             for _ in range(MAX_STEPS):
                 op = self._read(run, operation_id)
@@ -186,7 +245,18 @@ class OperationExecutor:
                         )
                     self._dispatch(run, op)
                 elif op.status in ("verifying", "pending_verification") or self._needs_reconcile(op):
-                    self._reconcile(run, op)
+                    if not self._reconcile(run, op):
+                        status_failures += 1
+                        if status_failures >= STATUS_FAILURES_PER_DRIVE:
+                            # Don't spend the lifetime allowance in a tight loop against a failing
+                            # status service; the queued follow-up checks again later (_after_drive).
+                            return ExecutionOutcome(
+                                operation_id=op.id,
+                                status="pending_verification",
+                                result_code="status_unavailable",
+                                message=templates.pending_verification(op.action),
+                                verified=False,
+                            )
                 else:  # approved (validated) or executing after a verified "not done"
                     self._dispatch(run, op)
             raise ErrandError(f"operation {operation_id} exceeded {MAX_STEPS} steps")
@@ -300,12 +370,14 @@ class OperationExecutor:
                 _ensure_state(
                     conn, run, "retry_wait", now=now, operation_id=op.id, reason="transient failure; retry scheduled"
                 )
-                conn.execute(
-                    "INSERT INTO jobs (id, kind, session_id, operation_id, due_at, created_at)"
-                    " SELECT %s, 'operation_retry', %s, %s, %s, %s WHERE NOT EXISTS ("
-                    " SELECT 1 FROM jobs WHERE kind = 'operation_retry' AND operation_id = %s"
-                    " AND status IN ('pending', 'claimed'))",
-                    (uuid4(), op.session_id, op.id, due, now, op.id),
+                queue.enqueue(
+                    conn,
+                    kind="operation_retry",
+                    session_id=op.session_id,
+                    operation_id=op.id,
+                    due_at=due,
+                    now=now,
+                    handover_from=run.claim.holder,
                 )
             elif effect == "rejected" and error is not None:
                 # Rejected before any effect; earlier attempts were already reconciled as not done.
@@ -335,7 +407,8 @@ class OperationExecutor:
             )
         return row is not None
 
-    def _reconcile(self, run: Run, op: _Op) -> None:
+    def _reconcile(self, run: Run, op: _Op) -> bool:
+        """One authoritative status check. False if the status tool itself failed."""
         now = self._clock.now()
         with self._db.session_txn(run.session_id) as conn:
             self._verify(conn, run, now)
@@ -379,8 +452,9 @@ class OperationExecutor:
                 observed = {"booking": found.model_dump(mode="json") if found else None}
         except ToolError as exc:
             self._record_reconcile_failure(run, op, attempt_id, exc)
-            return
+            return False
         self._decide(run, op, attempt_id, observed)
+        return True
 
     def _record_reconcile_failure(self, run: Run, op: _Op, attempt_id: UUID, exc: ToolError) -> None:
         now = self._clock.now()
@@ -744,6 +818,7 @@ def _load(conn: Conn, operation_id: UUID, session_id: int) -> _Op:
         dispatch_count=row["dispatch_count"],
         reconcile_count=row["reconcile_count"],
         next_retry_at=row["next_retry_at"],
+        proposal_checked_at=row["proposal_checked_at"],
     )
 
 
