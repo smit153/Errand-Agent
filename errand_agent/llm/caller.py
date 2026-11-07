@@ -44,7 +44,7 @@ MAX_PHRASE_ATTEMPTS = 2  # original + one grounding regeneration (G6)
 PER_CALL_TIMEOUT_S = 60.0
 DIAGNOSTIC_CHARS = 300
 CONTEXT_TRACE_CHARS = 20_000
-COST_NOTE = "unavailable: local model, no billing basis"
+COST_NOTE = "unavailable: subscription-billed via ModelMux; no per-token billing basis"
 _FENCE = re.compile(r"```(?:json)?\s*(.*?)\s*```", re.S)
 
 Purpose = Literal["extract", "act", "phrase"]
@@ -312,6 +312,7 @@ class ModelCaller:
                 "completion_tokens": reply.completion_tokens if reply else None,
             },
             "latency_ms": latency_ms,
+            "ignored_params": reply.ignored_params if reply else None,
             "cost": COST_NOTE,
         }
         with self._db.session_txn(ctx.run.session_id) as conn:

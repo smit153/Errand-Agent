@@ -2,7 +2,7 @@
 
 ## Current checkpoint — stage 4 in progress (2026-11-07)
 
-User said "continue to stage 4". Done: 4a parsing/ranking, 4b model layer (`errand_agent/llm/`), 4c agent (`workflow/agent.py` + `agent_tools.py` + `request.py`, migration 0003) with 21 scripted scenarios; 256 tests pass. Next: 4d real Qwen 3.5 smoke (E42) — needs Ollama + several-GB model download and ~4–5 GB free RAM; ask the user first. Then continue with stage 5 per the build plan unless the user says otherwise. Commits: no AI attribution lines.
+User said "continue to stage 4". Done: 4a parsing/ranking, 4b model layer (`errand_agent/llm/`), 4c agent (`workflow/agent.py` + `agent_tools.py` + `request.py`, migration 0003) with 21 scripted scenarios; 256 tests pass. 4d: the user chose to REPLACE Ollama with their ModelMux gateway (both providers configurable); DECISIONS §17 records it, including the PDF §1 risk. Adapter + factory + smoke runner done (260 tests). Next: the user runs `modelmux login claude` / `modelmux login codex` in their own terminal, then run `scripts/smoke.sh <provider>` (from a docker-group shell) and record results in PROGRESS/DECISIONS. Before stage 5, ask the user about the embedding backend and token accounting (see PROGRESS open items). Then continue with stage 5 per the build plan unless the user says otherwise. Commits: no AI attribution lines.
 
 ## Earlier checkpoint — stages 1–3 done and reviewed; pre-stage-4 requests handled (2026-11-07)
 

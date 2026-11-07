@@ -9,15 +9,18 @@ external services. The brief is `Orange_Engineering_Assignment.pdf`; the design 
 
 ## Status
 
-Stages 1–3 of the 8-stage build plan are done (see [PROGRESS.md](PROGRESS.md)):
+Stages 1–4 of the 8-stage build plan are done (see [PROGRESS.md](PROGRESS.md)):
 
 1. PostgreSQL 16 + pgvector schema, migrations, test harness, durable claims with generation fencing.
 2. All eight fixed mock tools with seeded, configurable failure behaviour.
 3. The code-enforced approval gate, the operation executor (exact-snapshot dispatch, forced
    source-of-truth verification, same-key retries, limits) and crash recovery.
+4. The conversational agent with guardrails G1–G11: state-scoped, enum-constrained tool calls,
+   code-resolved dates and ranking, code templates for every consequential message, grounding
+   checks, untrusted-data isolation, bounded retries and a degraded menu, all tested offline with
+   a scripted model.
 
-The language model, memory/context, background workers, trace export/eval table and the CLI are
-not built yet. Real bugs found so far are in [docs/BUGS.md](docs/BUGS.md).
+Memory/context, background workers, trace export/eval table and the CLI are not built yet. Real bugs found so far are in [docs/BUGS.md](docs/BUGS.md).
 
 ## Layout
 
@@ -26,7 +29,8 @@ not built yet. Real bugs found so far are in [docs/BUGS.md](docs/BUGS.md).
 | `errand_agent/db/` | Connection pool, per-session advisory-lock transactions, migrations |
 | `errand_agent/mocks/` | Seeded provider catalog and the Postgres-backed mock backend |
 | `errand_agent/tools/` | The eight tool contracts (Pydantic models) and `ToolClient` |
-| `errand_agent/workflow/` | State machine, approval gate, executor, budgets, recovery, templates |
+| `errand_agent/llm/` | Model types, scripted model, ModelMux adapter, validated tool calls, grounding |
+| `errand_agent/workflow/` | Agent, state machine, approval gate, executor, budgets, recovery, parsing, ranking, templates |
 | `tests/` | Invariant and contract tests against real Postgres |
 
 ## Setup
@@ -72,6 +76,27 @@ To change dependencies, edit `pyproject.toml`, then re-lock and verify before in
 scripts/dev.sh scripts/lock.sh
 python3 -I scripts/verify_lock_hashes.py requirements.lock requirements-dev.lock   # must report 0 failures
 ```
+
+## Language model
+
+The real model is reached through the developer's own [ModelMux](https://github.com/smit153/modelmux/)
+gateway: a local, OpenAI-compatible Chat Completions server fronting **Claude Code** (`claude`,
+port 8101) or **Codex** (`codex`, port 8102), selected with `ERRAND_MODELMUX_PROVIDER`. This
+replaced the original local-Ollama plan by the developer's decision (DECISIONS §17).
+
+- **Locality, and its caveat.** ModelMux and the whole errand path run on this machine; errand
+  providers and payments are mocked in-process. The model itself runs on Anthropic's or OpenAI's
+  servers under the developer's login. The assignment says the system must run "without real
+  providers, payments, or external service integrations"; this project reads that as covering
+  errand providers, payments and third-party service APIs, not the LLM. A reviewer may read it
+  differently.
+- **Offline evaluation.** Automated tests never call a real model; they use a scripted model.
+- **Determinism.** ModelMux ignores `temperature`, `seed` and `max_tokens`; they are sent anyway, and
+  the ignored list is recorded in every model-call trace. Real-model runs are therefore not seeded.
+- **Smoke test.** After `modelmux login claude` (or `codex`) in your own terminal, run
+  `scripts/smoke.sh claude`. It runs the three example requests from the brief and writes a report to
+  `artifacts/smoke/`. The script reads the gateway key from `~/.config/modelmux/secrets.env` and passes
+  it by environment variable; it is never committed, logged or traced.
 
 ## Configuration
 

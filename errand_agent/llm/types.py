@@ -55,6 +55,7 @@ class ModelReply(BaseModel):
     prompt_tokens: int | None = None
     completion_tokens: int | None = None
     model: str | None = None
+    ignored_params: list[str] = Field(default_factory=list)  # parameters the backend accepted but ignored
 
 
 class ModelUnavailableError(Exception):

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Literal
+
 from psycopg.conninfo import make_conninfo
 from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -21,6 +23,12 @@ class Settings(BaseSettings):
 
     timezone: str = "Asia/Kolkata"
     mock_seed: int = 42
+
+    # Real-model backend: the user's ModelMux gateway (DECISIONS §17). Key from env only.
+    modelmux_provider: Literal["claude", "codex"] = "claude"
+    modelmux_url: str | None = None  # default per provider: claude :8101, codex :8102
+    modelmux_model: str | None = None  # claude default "sonnet"; codex default: first model the gateway lists
+    modelmux_api_key: SecretStr | None = None
 
     lock_timeout_ms: int = Field(default=2000, ge=1, le=2000)
     statement_timeout_ms: int = Field(default=5000, ge=1)

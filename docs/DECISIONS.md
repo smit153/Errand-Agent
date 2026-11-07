@@ -1,6 +1,6 @@
 # Errand Agent — decisions v2
 
-**7 November 2026 · design only; implementation requires user approval.** The user's Design Revision v2 governs this document. The actual source is `Orange_Engineering_Assignment.pdf`; no `ASSIGNMENT.md` currently exists. Every PDF requirement remains binding, without reinterpretation. Sections 1–16 below are current. Appendix A preserves v1 verbatim as **superseded historical material**, not implementation instructions. Unchanged choices are explicitly carried forward.
+**7 November 2026 · build approved; stages 1–4 implemented.** The user's Design Revision v2 (`docs/DESIGN_REVISION_v2.md`) governs this document, as amended by the user's v3 decision in §17 (ModelMux replaces Ollama). The source is `Orange_Engineering_Assignment.pdf`, which v2 calls ASSIGNMENT.md. Every PDF requirement remains binding, without reinterpretation. Sections 1–16 below are current. Appendix A preserves v1 verbatim as **superseded historical material**, not implementation instructions. Unchanged choices are explicitly carried forward.
 
 ## 1. Keys and attempts — retained
 
@@ -52,7 +52,7 @@ The earlier “all eight schemas every call” assumption is superseded: only st
 
 Drop order remains: (1) reviews, (2) lowest-ranked optional memories, (3) extra unselected candidate descriptions/nonessential old tool data, (4) shrink retry excerpt. Keep policy/schema, current user intent, approved material facts, unresolved status and candidate facts required for this decision. Do not silently omit enum values while pretending they remain selectable: page the options explicitly if needed. If essentials still overflow, no inference; use a clear shorter-input/menu template. Excluded/forgotten/unconfirmed facts and raw prior conversation are never candidates for inclusion. Tests capture complete prompts and enforce exclusion and token counts on originals and retries.
 
-## 4. Model runtime and invalid output — runtime superseded, retry rule retained
+## 4. Model runtime and invalid output — runtime superseded twice (now §17), retry rule retained
 
 Use local Ollama `/api/chat` with native `tools` and `message.tool_calls`, **not JSON-schema-in-content prompting**. The [Ollama tool guide](https://docs.ollama.com/capabilities/tool-calling) documents this interface. Extraction uses internal `update_request` tool arguments; action choice exposes only permitted native functions. This is an orchestration layer, not a change to the eight backend contracts.
 
@@ -114,7 +114,7 @@ A lease alone does not stop a delayed worker from executing a side effect. Befor
 
 Approval consumption, unique proposal→operation, key uniqueness, revision CAS, and unique event ingestion protect invariants. Backend effects plus their replay record commit together. No transaction spans inference/tool transport. Jobs and outbox changes commit with the state change that creates them; at-least-once delivery with stable event/user IDs does not claim exactly-once terminal display. Compare: Postgres adds Docker/migrations and more concurrency tests than SQLite, but gives one production/test behavior and shared workers; distributed brokers or a singleton lock would respectively add needless infrastructure or block the intended concurrency. Crash/interleaving tests are required before claiming these guarantees.
 
-## 10. Ollama embeddings and pgvector — MiniLM/PyTorch superseded
+## 10. Ollama embeddings and pgvector — MiniLM/PyTorch superseded; embedding backend to be re-decided in stage 5 (§17)
 
 Choose **`nomic-embed-text:v1.5`, native 768 dimensions**, via local Ollama `/api/embed`. The [Ollama model listing](https://ollama.com/library/nomic-embed-text) supplies the tag; the [Nomic model card](https://huggingface.co/nomic-ai/nomic-embed-text-v1.5) describes 768-dimensional representations and retrieval prefixes. Pin full installed digest/runtime and verify response dimension during setup; no digest has yet been installed/verified. Do not use sentence-transformers or PyTorch. Prefix query with `search_query: ` and canonical fact with `search_document: ` consistently, pin normalization and content hashes. [Ollama embed](https://docs.ollama.com/api/embed) supports rejecting excess input with `truncate=false`; use that rather than silent truncation.
 
@@ -286,7 +286,7 @@ This table covers PDF §§1–5, including individual failure modes and delivera
 | §5 3–5 minute full-booking demo, chat/trace side by side | §§8,13,15 | E45 recording duration/content review; live failure desirable |
 | §5 coding-assistant transcript | §§13,15 | E45 retained/exported conversation artifact |
 
-## 15. Risk-ordered build plan — pending approval, no code yet
+## 15. Risk-ordered build plan — approved; stages 1–4 done (see PROGRESS.md)
 
 Each numbered stage is split into reviewable tasks. Run its acceptance checks before proceeding; update PROGRESS.md and HANDOFF.md after every task. Tracing hooks and minimal journal events start with persistence/recovery even though the full exporter/eval report is stage 7. Use direct workflow/test harness calls until stage 8; no UI dependency blocks safety validation.
 
@@ -299,7 +299,7 @@ Each numbered stage is split into reviewable tasks. Run its acceptance checks be
 7. **Trace export + eval runner.** (a) Complete exact-context/native-call/guardrail/attempt/latency/usage traces and JSONL export. (b) Run ≥20 distinct simulated-user scenarios and generate all-five-column eval table plus this requirement mapping's evidence links. (c) Produce actual timeout-after-success raw trace/annotated excerpt and document three actual bugs with regression tests as encountered. Gate: E45 and full offline suite, bounded costs marked available/unavailable, no fabricated results. Retain assistant transcript throughout all stages.
 8. **FastAPI + thin CLI last.** (a) Wire local HTTP session/message/display-receipt/notification/trace endpoints to tested engine; authorization, request dedupe and server-side revision checks. (b) Thin terminal client renders code templates and live trace panes, handles disconnect/resume and async event races while input is open. (c) Clean-checkout README/setup, offline runtime check, final ≤one-page export, 3–5 minute recording and deliverable audit. Gate: E05/E06 input races through HTTP plus E42–E45 and complete requirement table. Stop if any required evidence remains missing; additional feature proposals stay gated on all PDF acceptance tests passing.
 
-Implementation starts only after the user approves this revised design/build plan. Stages above are future work, not completed tasks.
+The user approved this plan on 2026-11-07. PROGRESS.md records which stages are complete and their test results.
 
 ## 16. Supersession and documentation status
 
@@ -315,8 +315,25 @@ Implementation starts only after the user approves this revised design/build pla
 | DECISIONS v1 §11 local retry scheduling | Superseded by §11 Postgres due jobs; key/attempt/restart guarantees retained |
 | DECISIONS v1 §§1,5–7 | Retained with stronger v2 guardrails and service revision binding; no weakening |
 | DESIGN.mdx / DESIGN.plan.html ModelMux visual | Historical/superseded; do not present as current. Regeneration not part of this requested two-document revision |
+| §4 Ollama Qwen 3.5 native tools as the runtime model; v2 §3; §6 "cloud LLM out of scope" | Superseded by §17 (user decision, 2026-11-07): ModelMux gateway, Claude Code or Codex. Repair + three retries, scripted offline evals and all guardrails retained |
 
 No application files, Compose configuration, database, model downloads or tests are created/run by this documentation task. Actual model/digest/size, latency, tokenizer counts, database concurrency correctness and embedding relevance remain implementation gates. Markdown design note is compact; exact one-page rendering is a final artifact check, not a claim inferred from word count. PDF was reread for the trace table; no `ASSIGNMENT.md` was fabricated.
+
+## 17. Design Revision v3 — ModelMux replaces Ollama (user decision, 2026-11-07)
+
+**Decision.** At stage 4d the user chose their own [ModelMux](https://github.com/smit153/modelmux/) gateway as the only real-model path, replacing local Ollama Qwen 3.5. Both providers are supported and selected by configuration: `claude` (`http://127.0.0.1:8101/v1`, models such as `sonnet`, `haiku`) and `codex` (`http://127.0.0.1:8102/v1`, account-specific models listed by `/v1/models`). The user was shown the alternatives (keep Ollama as default with ModelMux as a second backend, or install Ollama now) and chose replacement.
+
+**PDF §1 interpretation, and its risk.** PDF §1 says the system "must run locally without real providers, payments, or external service integrations". This design reads that as: no real errand providers, payments or third-party service APIs. Those remain mocked in-process, and nothing in the errand path talks to an external service. The LLM itself is reached through a gateway running on the local machine (loopback only, digest-pinned image), but ModelMux's models run on Anthropic's or OpenAI's servers using the user's own logins. **A reviewer may read this as an external service integration.** That risk is accepted by the user and is stated in DESIGN.md and README. Offline evaluation is unaffected: every automated eval still runs against the scripted model with no network (PDF §4).
+
+**What changes.**
+- *Adapter:* `ModelMuxChatModel` speaks OpenAI Chat Completions with `tools`. Action calls send `tool_choice: "required"` and `parallel_tool_calls: false`; ModelMux simulates tool calls and validates them before returning `tool_calls`. Code still revalidates everything (G1/G2/G7/G10 unchanged). The gateway URL must be loopback or a local service name. The gateway key comes from `ERRAND_MODELMUX_API_KEY`, is never logged, and is never committed.
+- *G8 determinism:* ModelMux accepts but ignores `temperature`, `seed` and `max_tokens`, and lists them in `X-ModelMux-Ignored-Params`. The app still sends temperature 0 / seed 42 and traces the ignored list on every call, but **real-model runs are not seeded**. Eval determinism always came from the scripted model, which is unchanged.
+- *Output cap:* the 768-token output cap can't be enforced through ModelMux, so it is not claimed. Every reply is still bounded by validation, and phrased text by grounding.
+- *Cost:* usage tokens are recorded when ModelMux reports them. Cost is "unavailable: subscription-billed via ModelMux"; it is not fabricated.
+- *E42 (revised):* the three-example smoke test runs through ModelMux against seeded mocks and an injected clock. It records the first-pass and after-retry valid-call rates, latency per call and per flow, and the provider/model used. The user performs `modelmux login`; the agent never handles credentials.
+- *Removed:* the Ollama chat adapter, which is superseded. The local-only URL check moves to the ModelMux adapter.
+
+**Open, to decide at stage 5 (the user will be asked).** (1) The *embedding backend*: v2 §5 chose Ollama `nomic-embed-text`, but ModelMux offers no embeddings endpoint. (2) *Token accounting* for the 4,096-token input cap: there is no local tokenizer for hosted Claude/Codex models, and DECISIONS §3 forbids silent chars-per-token assumptions.
 
 ## Appendix A — v1 decisions (superseded historical record)
 
