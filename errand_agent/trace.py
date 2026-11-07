@@ -13,14 +13,14 @@ from errand_agent.db import Conn
 MAX_TEXT = 500
 
 
-def sanitize(value: Any) -> Any:
+def sanitize(value: Any, max_text: int = MAX_TEXT) -> Any:
     """Bound free text and mark nothing as trusted; traces are audit data, never prompt input."""
     if isinstance(value, str):
-        return value if len(value) <= MAX_TEXT else value[:MAX_TEXT] + f"…[+{len(value) - MAX_TEXT} chars]"
+        return value if len(value) <= max_text else value[:max_text] + f"…[+{len(value) - max_text} chars]"
     if isinstance(value, dict):
-        return {str(k): sanitize(v) for k, v in value.items()}
+        return {str(k): sanitize(v, max_text) for k, v in value.items()}
     if isinstance(value, list | tuple):
-        return [sanitize(v) for v in value]
+        return [sanitize(v, max_text) for v in value]
     return value
 
 
@@ -33,9 +33,11 @@ def record(
     run_id: UUID | None = None,
     session_id: int | None = None,
     operation_id: UUID | None = None,
+    max_text: int = MAX_TEXT,
 ) -> None:
+    """`max_text` is raised only for model-call events, whose exact context must be logged."""
     conn.execute(
         "INSERT INTO trace_events (at, run_id, session_id, operation_id, kind, payload)"
         " VALUES (%s, %s, %s, %s, %s, %s)",
-        (at, run_id, session_id, operation_id, kind, Jsonb(sanitize(payload))),
+        (at, run_id, session_id, operation_id, kind, Jsonb(sanitize(payload, max_text))),
     )

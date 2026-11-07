@@ -429,3 +429,23 @@ def test_dispatch_trace_carries_attempt_and_generation(h: Harness) -> None:
     (call,) = h.tool_calls("book")
     assert call["attempt_id"]
     assert call["claim_generation"] == run.claim.generation
+
+
+@pytest.mark.invariant
+def test_operation_active_time_lifetime_cap_keeps_unknown_unknown(h: Harness) -> None:
+    snap = book_snapshot(h.tools, h.ctx)
+    op_id = h.approve(snap)
+    with h.db.txn() as conn:  # earlier runs already used almost all of this operation's active time
+        conn.execute("UPDATE operations SET active_ms = 299000 WHERE id = %s", (op_id,))
+    h.backend.configure(ScenarioConfig(book_outcomes=["timeout_booked"]))
+    h.executor.fault = advance_at(h.clock, "after_dispatch", timedelta(seconds=5))
+    out = h.executor.execute(h.run(), op_id, book_call(snap))
+    assert out.status == "pending_verification"
+    assert out.result_code == "limit_operation_active_time"
+    assert not out.verified
+    assert h.op(op_id)["active_ms"] == 300000  # charged, capped at the lifetime limit
+    assert len(h.tool_calls("get_booking_status")) == 0  # refused before it was sent
+    # A new run cannot reset the allowance.
+    again = h.executor.resume(h.run(), op_id)
+    assert again.status == "pending_verification"
+    assert len(h.tool_calls("book")) == 1

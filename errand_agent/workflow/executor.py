@@ -33,7 +33,13 @@ from errand_agent.tools.context import Fence, ToolContext
 from errand_agent.tools.errors import ToolError, ToolRejectedError, ToolTransientError
 from errand_agent.tools.models import BookingRecord
 from errand_agent.workflow import templates
-from errand_agent.workflow.budget import OperationLimits, Run, reserve_run
+from errand_agent.workflow.budget import (
+    OperationLimits,
+    Run,
+    charge_operation_time,
+    check_operation_time,
+    reserve_run,
+)
 from errand_agent.workflow.snapshots import (
     SNAPSHOT,
     BookSnapshot,
@@ -51,6 +57,7 @@ AnySnapshot = BookSnapshot | CancelSnapshot | RescheduleSnapshot
 DispatchEffect = Literal["returned", "no_effect", "rejected", "unknown"]
 ExecFault = Callable[[str, UUID], None]  # (point, operation_id); may raise to simulate a crash
 MAX_STEPS = 32  # loop guard; real bounds are the lifetime/run caps
+ORPHAN_CHARGE_CAP_MS = 60_000  # a crashed call is charged at most the per-call bound
 
 
 class OperationNotFoundError(ErrandError):
@@ -226,6 +233,7 @@ class OperationExecutor:
                     "operation_dispatches", f"operation {op.id} used all {self._limits.dispatches} dispatches"
                 )
             reserve_run(conn, run, "tool_invocations", now)
+            check_operation_time(conn, op.id, self._limits)  # after the run deadline check
             attempt_id = uuid4()
             ordinal = fresh.dispatch_count + 1
             conn.execute(
@@ -261,6 +269,7 @@ class OperationExecutor:
         now = self._clock.now()
         with self._db.session_txn(run.session_id) as conn:
             self._verify(conn, run, now)  # a fenced worker's late result is discarded here
+            self._charge_attempt(conn, op.id, fence.attempt_id, now)
             attempt_status = {
                 "returned": "completed",
                 "no_effect": "failed",
@@ -337,12 +346,17 @@ class OperationExecutor:
                     f"operation {op.id} used all {self._limits.reconciliations} reconciliations",
                 )
             reserve_run(conn, run, "tool_invocations", now)
+            check_operation_time(conn, op.id, self._limits)  # after the run deadline check
             # Any attempt still reserved/unknown may have reached the backend: it is "unknown" until checked.
-            conn.execute(
+            # A crashed attempt's time is charged conservatively, up to the per-call bound.
+            orphans = conn.execute(
                 "UPDATE operation_attempts SET status = 'unknown', finished_at = coalesce(finished_at, %s)"
-                " WHERE operation_id = %s AND kind = 'dispatch' AND status = 'reserved'",
+                " WHERE operation_id = %s AND kind = 'dispatch' AND status = 'reserved' RETURNING started_at",
                 (now, op.id),
-            )
+            ).fetchall()
+            for orphan in orphans:
+                elapsed = int((now - orphan["started_at"]).total_seconds() * 1000)
+                charge_operation_time(conn, op.id, min(elapsed, ORPHAN_CHARGE_CAP_MS), self._limits)
             ordinal = fresh.reconcile_count + 1
             attempt_id = uuid4()
             tool = "get_booking_status" if op.action == "book" else "list_bookings"
@@ -372,6 +386,7 @@ class OperationExecutor:
         now = self._clock.now()
         with self._db.session_txn(run.session_id) as conn:
             self._verify(conn, run, now)
+            self._charge_attempt(conn, op.id, attempt_id, now)
             conn.execute(
                 "UPDATE operation_attempts SET status = 'failed', outcome = %s, finished_at = %s WHERE id = %s",
                 (Jsonb(_error_payload(exc)), now, attempt_id),
@@ -383,6 +398,7 @@ class OperationExecutor:
         now = self._clock.now()
         with self._db.session_txn(run.session_id) as conn:
             self._verify(conn, run, now)
+            self._charge_attempt(conn, op.id, attempt_id, now)
             fresh = _load(conn, op.id, run.session_id)
             conn.execute(
                 "UPDATE operation_attempts SET status = 'completed', outcome = %s, finished_at = %s WHERE id = %s",
@@ -679,6 +695,12 @@ class OperationExecutor:
         )
 
     # ================================================================== helpers
+    def _charge_attempt(self, conn: Conn, operation_id: UUID, attempt_id: UUID, now: datetime) -> None:
+        row = fetch_one(conn, "SELECT started_at FROM operation_attempts WHERE id = %s", (attempt_id,))
+        if row is not None:
+            elapsed = int((now - row["started_at"]).total_seconds() * 1000)
+            charge_operation_time(conn, operation_id, elapsed, self._limits)
+
     def _read(self, run: Run, operation_id: UUID) -> _Op:
         with self._db.session_txn(run.session_id) as conn:
             self._verify(conn, run, self._clock.now())

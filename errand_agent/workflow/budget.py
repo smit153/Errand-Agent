@@ -41,6 +41,8 @@ class OperationLimits(BaseModel):
 
     dispatches: int = Field(default=3, ge=1, le=3)
     reconciliations: int = Field(default=6, ge=1, le=6)
+    model_calls: int = Field(default=40, ge=1, le=40)
+    active_seconds: int = Field(default=300, ge=1, le=300)
 
 
 class Run(BaseModel):
@@ -118,3 +120,34 @@ def reserve_run(conn: Conn, run: Run, counter: RunCounter, now: datetime) -> Non
     row = conn.execute(query, (run.id, limit)).fetchone()
     if row is None:
         raise BudgetExhaustedError(counter, f"run {run.id} reached {counter}={limit}")
+
+
+# ---------------------------------------------------------------------- per-operation lifetime limits
+def reserve_operation_model_call(conn: Conn, operation_id: UUID, limits: OperationLimits) -> None:
+    """Take one physical model request from the operation's lifetime allowance (survives restarts)."""
+    row = fetch_one(
+        conn,
+        "UPDATE operations SET physical_model_calls = physical_model_calls + 1"
+        " WHERE id = %s AND physical_model_calls < %s RETURNING physical_model_calls",
+        (operation_id, limits.model_calls),
+    )
+    if row is None:
+        raise BudgetExhaustedError(
+            "operation_model_calls", f"operation {operation_id} used all {limits.model_calls} model calls"
+        )
+
+
+def check_operation_time(conn: Conn, operation_id: UUID, limits: OperationLimits) -> None:
+    row = fetch_one(conn, "SELECT active_ms FROM operations WHERE id = %s", (operation_id,))
+    if row is not None and int(row["active_ms"]) >= limits.active_seconds * 1000:
+        raise BudgetExhaustedError(
+            "operation_active_time", f"operation {operation_id} used all {limits.active_seconds}s of active time"
+        )
+
+
+def charge_operation_time(conn: Conn, operation_id: UUID, elapsed_ms: int, limits: OperationLimits) -> None:
+    """Charge active time (model, tool and lock waits), capped at the lifetime limit."""
+    conn.execute(
+        "UPDATE operations SET active_ms = LEAST(%s, active_ms + %s) WHERE id = %s",
+        (limits.active_seconds * 1000, max(0, elapsed_ms), operation_id),
+    )
