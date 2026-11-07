@@ -8,7 +8,7 @@ Read first: PROGRESS.md, docs/DESIGN.md, docs/DECISIONS.md §§1–16 (§15 buil
 
 Done: stage 1 (see PROGRESS.md). Code layout: `errand_agent/{config,clock,errors,trace,claims}.py`, `errand_agent/db/` (Database, session_txn, migrate, migrations/0001_init.sql), `tests/` (conftest recreates `errand_test` once per session and truncates per test).
 
-In progress: stage 2a. `errand_agent/tools/{models,errors,context}.py` drafted (uncommitted at time of writing); mock backend/catalog/ToolClient next.
+Done: stage 2a — `errand_agent/tools/{models,errors,context,client}.py`, `errand_agent/mocks/{catalog,backend}.py` (read-only tools). In progress: 2b (hold/book/status).
 
 Key implementation decisions (within the design):
 - Consequential mock calls carry an internal `Fence` (holder, generation, operation_id, attempt_id) in `ToolContext`, never as tool arguments; backend re-verifies claim + reserved attempt + snapshot under the session advisory lock in the same transaction as the effect.
@@ -17,7 +17,7 @@ Key implementation decisions (within the design):
 
 How to run: `docker compose up -d --wait postgres` then `scripts/dev.sh scripts/check.sh`. From this agent's sandbox, wrap with `wsl.exe --distribution Ubuntu --user laptop --cd <repo> --exec bash -c '...'` (fresh WSL process has docker group). Re-lock deps: `scripts/dev.sh scripts/lock.sh` then `python3 -I scripts/verify_lock_hashes.py requirements.lock requirements-dev.lock` (must report 0 failures before installing).
 
-Next 3 steps: finish 2a (catalog + search/get_provider/list_bookings + E41 tests), 2b (hold/book/status with durable RNG, replay, fencing), 2c (cancel 503 phase, reschedule conflict).
+Next 3 steps: 2b (hold/book/status with durable RNG, replay, fencing), 2c (cancel 503 phase, reschedule conflict).
 
 <details>
 <summary>Design-phase handoff history (superseded)</summary>

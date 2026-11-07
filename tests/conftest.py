@@ -19,6 +19,10 @@ from errand_agent.clock import FakeClock
 from errand_agent.config import Settings, load_settings
 from errand_agent.db import Database
 from errand_agent.db.migrate import migrate
+from errand_agent.mocks.backend import MockBackend
+from errand_agent.mocks.catalog import DEMO_USER
+from errand_agent.tools.client import ToolClient
+from errand_agent.tools.context import ToolContext
 
 # Friday 6 November 2026, 08:00 Asia/Kolkata (02:30 UTC).
 T0 = datetime(2026, 11, 6, 2, 30, tzinfo=UTC)
@@ -76,7 +80,7 @@ def clock() -> FakeClock:
 @pytest.fixture
 def user_id(db: Database) -> str:
     with db.txn() as conn:
-        conn.execute("INSERT INTO users (id) VALUES ('user-demo')")
+        conn.execute("INSERT INTO users (id) VALUES ('user-demo') ON CONFLICT DO NOTHING")
     return "user-demo"
 
 
@@ -88,3 +92,25 @@ def make_session(db: Database, user: str, now: datetime) -> int:
         ).fetchone()
     assert row is not None
     return int(row["id"])
+
+
+@pytest.fixture
+def backend(db: Database, clock: FakeClock) -> MockBackend:
+    mock = MockBackend(db, clock, seed=42)
+    mock.seed(anchor=T0)
+    return mock
+
+
+@pytest.fixture
+def tools(backend: MockBackend, db: Database, clock: FakeClock) -> ToolClient:
+    return ToolClient(backend, db, clock)
+
+
+@pytest.fixture
+def demo_session(backend: MockBackend, db: Database, clock: FakeClock) -> int:
+    return make_session(db, DEMO_USER, clock.now())
+
+
+@pytest.fixture
+def ctx(demo_session: int) -> ToolContext:
+    return ToolContext(user_id=DEMO_USER, session_id=demo_session)
