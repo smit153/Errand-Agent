@@ -179,10 +179,10 @@ def test_inferred_memory_cannot_be_active_unconfirmed(db: Database, user_id: str
     now = clock.now()
     with pytest.raises(pg_errors.CheckViolation), db.txn() as conn:
         conn.execute(
-            "INSERT INTO memories (id, user_id, field, value, origin, status, confirmed, provenance,"
-            " created_at, updated_at) VALUES (%s, %s, 'earliest_time', %s, 'inferred', 'active', false,"
+            "INSERT INTO memories (id, user_id, display_no, field, value, origin, status, confirmed, provenance,"
+            " created_at, updated_at) VALUES (%s, %s, 1, 'earliest_time', %s, 'inferred', 'active', false,"
             " %s, %s, %s)",
-            (uuid.uuid4(), user_id, Jsonb("10:00"), Jsonb({}), now, now),
+            (uuid.uuid4(), user_id, Jsonb({"kind": "earliest_time", "earliest": "10:00:00"}), Jsonb({}), now, now),
         )
 
 

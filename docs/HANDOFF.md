@@ -4,7 +4,7 @@
 
 Stage 4a–4d done. 4d-b smoke (E42 revised) measured on Codex (`modelmux:codex:gpt-6.1-sol`), two runs: 3/3 flows completed, 24/24 calls valid first pass, median call ≈5.5 s; see PROGRESS 4d-b and `artifacts/smoke/`. BUG-006 (smoke runner read `MODELMUX_API_KEY`; ModelMux writes `MODELMUX_API_KEYS`) fixed via `scripts/modelmux_key.sh` + `tests/test_smoke_scripts.py`; 266 tests pass. Claude provider not logged in; run `scripts/smoke.sh claude` after the user logs in. Never read, print or inspect the gateway key (the auto-mode classifier also blocks it); only `modelmux_key.sh` touches it, inside a command substitution. Docker from this shell: `wsl.exe --distribution Ubuntu --user laptop --cd <repo> --exec bash -c '...'`.
 
-Stage-5 decisions made by the user (DECISIONS §18): local Ollama `nomic-embed-text` for embeddings only; context cap = 4,096 UTF-8 bytes of app-assembled messages + tool schemas. Next: stage 5a–5d per PROGRESS. Commits: no AI attribution lines.
+Stage-5 decisions made by the user (DECISIONS §18): local Ollama `nomic-embed-text` for embeddings only; context cap = 4,096 UTF-8 bytes of app-assembled messages + tool schemas. 5a (memory store, migration 0004, 30 invariant tests) done; 296 tests pass. Next: 5b agent integration, then 5c context builder, 5d Ollama embedder (see PROGRESS). Commits: no AI attribution lines.
 
 ## Earlier checkpoint — stages 1–3 done and reviewed; pre-stage-4 requests handled (2026-11-07)
 
