@@ -114,7 +114,7 @@ A lease alone does not stop a delayed worker from executing a side effect. Befor
 
 Approval consumption, unique proposal→operation, key uniqueness, revision CAS, and unique event ingestion protect invariants. Backend effects plus their replay record commit together. No transaction spans inference/tool transport. Jobs and outbox changes commit with the state change that creates them; at-least-once delivery with stable event/user IDs does not claim exactly-once terminal display. Compare: Postgres adds Docker/migrations and more concurrency tests than SQLite, but gives one production/test behavior and shared workers; distributed brokers or a singleton lock would respectively add needless infrastructure or block the intended concurrency. Crash/interleaving tests are required before claiming these guarantees.
 
-## 10. Ollama embeddings and pgvector — MiniLM/PyTorch superseded; embedding backend to be re-decided in stage 5 (§17)
+## 10. Ollama embeddings and pgvector — MiniLM/PyTorch superseded; reconfirmed for embeddings only in §18
 
 Choose **`nomic-embed-text:v1.5`, native 768 dimensions**, via local Ollama `/api/embed`. The [Ollama model listing](https://ollama.com/library/nomic-embed-text) supplies the tag; the [Nomic model card](https://huggingface.co/nomic-ai/nomic-embed-text-v1.5) describes 768-dimensional representations and retrieval prefixes. Pin full installed digest/runtime and verify response dimension during setup; no digest has yet been installed/verified. Do not use sentence-transformers or PyTorch. Prefix query with `search_query: ` and canonical fact with `search_document: ` consistently, pin normalization and content hashes. [Ollama embed](https://docs.ollama.com/api/embed) supports rejecting excess input with `truncate=false`; use that rather than silent truncation.
 
@@ -286,7 +286,7 @@ This table covers PDF §§1–5, including individual failure modes and delivera
 | §5 3–5 minute full-booking demo, chat/trace side by side | §§8,13,15 | E45 recording duration/content review; live failure desirable |
 | §5 coding-assistant transcript | §§13,15 | E45 retained/exported conversation artifact |
 
-## 15. Risk-ordered build plan — approved; stages 1–4 done (see PROGRESS.md)
+## 15. Risk-ordered build plan — approved; stages 1–4 done, stage 5 in progress (see PROGRESS.md)
 
 Each numbered stage is split into reviewable tasks. Run its acceptance checks before proceeding; update PROGRESS.md and HANDOFF.md after every task. Tracing hooks and minimal journal events start with persistence/recovery even though the full exporter/eval report is stage 7. Use direct workflow/test harness calls until stage 8; no UI dependency blocks safety validation.
 
@@ -334,7 +334,17 @@ No application files, Compose configuration, database, model downloads or tests 
 - *E42 measured (Codex, 2026-11-07):* two runs on `modelmux:codex:gpt-6.1-sol` each completed 3/3 PDF flows with 24/24 calls valid on the first pass, no booking without approval, per-call latency median ≈5.5 s (max 9.7 s) and 27–58 s per flow. Two runs are a smoke check, not a reliability estimate; unseeded real-model behaviour can vary. Claude is not yet measured (not logged in).
 - *Removed:* the Ollama chat adapter, which is superseded. The local-only URL check moves to the ModelMux adapter.
 
-**Open, to decide at stage 5 (the user will be asked).** (1) The *embedding backend*: v2 §5 chose Ollama `nomic-embed-text`, but ModelMux offers no embeddings endpoint. (2) *Token accounting* for the 4,096-token input cap: there is no local tokenizer for hosted Claude/Codex models, and DECISIONS §3 forbids silent chars-per-token assumptions.
+**Resolved in §18 (user decisions at stage 5).** Previously open: (1) The *embedding backend*: v2 §5 chose Ollama `nomic-embed-text`, but ModelMux offers no embeddings endpoint. (2) *Token accounting* for the 4,096-token input cap: there is no local tokenizer for hosted Claude/Codex models, and DECISIONS §3 forbids silent chars-per-token assumptions.
+
+## 18. Stage-5 decisions — embedding backend and context-cap accounting (user decisions, 2026-11-07)
+
+**Embeddings: local Ollama, embeddings only.** §10 stands as written: `nomic-embed-text:v1.5`, 768 dimensions, loopback `/api/embed` with `truncate: false`, the `search_query: ` / `search_document: ` prefixes, and the full digest and runtime version pinned once installed and verified. Ollama serves embeddings only; chat stays on ModelMux (§17). Because the embedder runs on this machine, memory retrieval adds no external dependency. Ordinary evals still use checked-in fixture vectors. The real-embedder pair check is a separate, explicitly selected integration test that fails clearly when Ollama or the model is missing and never downloads anything. The alternatives the user was shown were an in-process ONNX model, deterministic lexical vectors, and Postgres full-text search.
+
+**Context cap: a byte bound on what the app sends.** PDF §3 requires a fixed context cap. With hosted Claude/Codex models there is no local tokenizer, and §3 forbids assumed chars-per-token ratios. The cap is therefore enforced as **at most 4,096 UTF-8 bytes of app-assembled input**: the serialized messages plus the offered tool schemas, exactly as sent. For byte-level BPE tokenizers every token encodes at least one byte, so this guarantees at most 4,096 tokens of app content without a tokenizer. The §3 allocation table and drop order are kept and read in bytes. A request that still exceeds the cap after the drop order is never sent; it fails with an explicit outcome (E22).
+
+**Measured gateway overhead is outside the cap and is stated, not hidden.** ModelMux adds its own CLI system prompt and tool-calling framing: in the Codex smoke test, a 251-byte phrase request was reported as 4,532 prompt tokens, and the app's own content peaked at 1,922 bytes. The provider-reported `prompt_tokens` stays in every model-call trace. The cap claims only what the app controls. The 768 output cap remains unenforceable through ModelMux (§17).
+
+The alternatives the user was shown were a proxy tokenizer (tiktoken o200k) and enforcement from provider-reported tokens after the call.
 
 ## Appendix A — v1 decisions (superseded historical record)
 

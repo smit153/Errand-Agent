@@ -29,6 +29,12 @@
 - [x] 4d-a **Design v3 (user decision):** ModelMux (Claude Code or Codex, configurable) replaces local Ollama as the only real-model path. The user was shown the PDF §1 / v2 §3 conflict and chose replacement. DESIGN.md and DECISIONS §17 updated (interpretation and risk recorded; G8 seeding not enforceable through ModelMux; the 768 output cap not claimed). Ollama adapter removed; `llm/modelmux.py` adapter (tool_choice required, no parallel calls, ignored-params traced, key from env only, local-URL check) + `llm/factory.py`; README section. Tests: 260 pass.
 - [x] 4d-b Smoke test (E42 revised), **Codex measured**: `scripts/smoke.sh codex` on `modelmux:codex:gpt-6.1-sol`, run twice (2026-11-07 18:31 and 18:37 UTC). Both runs: 3/3 PDF flows reached `completed`; 24 logical / 24 physical calls (17 act, 5 extract, 2 phrase); first-pass and after-retry valid rate 1.0; no rejected calls; no booking without approval. Per-call latency median 5.4 / 5.7 s, max 8.0 / 9.7 s; flows 50–58 s (plumber), 27–31 s (AC reschedule), 57–58 s (same electrician). ModelMux reported temperature, seed and max_tokens ignored. Reports: `artifacts/smoke/`. Real bug BUG-006 (wrong key variable in the runner) fixed with a regression test; 266 tests pass. **Claude not measured**: its provider is not logged in (`modelmux status`); run `scripts/smoke.sh claude` after `modelmux login claude`.
 
+## Stage 5 — memory, embeddings, context (in progress, 2026-11-07)
+- [ ] 5a Memory lifecycle: typed facts with provenance; explicit memory from validated user statements; code-generated unconfirmed inferred candidates; separate confirm; inspect/correct/forget across sessions (E19, E20 without vectors).
+- [ ] 5b Embeddings: `Embedder` protocol, fixture embedder, Ollama embedder (loopback, `truncate: false`, prefixes, dimension check); atomic fact+vector revisions, pending_embedding on failure; SQL hard filters, exact cosine, top-k 6, min 0.30, ties by ID (E20, E21, E43 fixture part).
+- [ ] 5c Context builder: 4,096-byte cap over messages + tool schemas, §3 allocation and drop order, explicit failure when essentials don't fit; 50+ seeded memories and a long prior conversation that never reaches context; exact context traced (E21, E22, E40).
+- [ ] 5d Real embedder: pin the Ollama runtime and `nomic-embed-text:v1.5` digest; integration pair-ranking check (E43).
+
 ## Pre-stage-4 requests (2026-11-07)
 - [x] Git identity fixed and AI attribution removed from history by the user; no attribution in future commits.
 - [x] Cross-check `docs/DESIGN_REVISION_v2.md` (saved from the user's paste) against DESIGN.md/DECISIONS.md: nothing from v2 is missing. Follow-ups recorded under Open items (job-queue dispatch, event ingestion, stale status lines, one-page check).
@@ -46,7 +52,7 @@
 - [ ] **Stale status lines.** DESIGN.md line 3 ("implementation awaits approval") and DECISIONS.md line 3 / §15 heading ("pending approval, no code yet") predate the build approval. Update them with the next design-doc edit.
 - [ ] **One-page check of DESIGN.md** (v2 §8.1) after the real trace excerpt is added (stage 7).
 
-- [ ] **Stage 5 decisions to ask the user (from v3):** embedding backend (v2 chose Ollama nomic-embed; ModelMux has no embeddings endpoint) and token accounting for the 4,096-token input cap (no local tokenizer for Claude/Codex).
+- [x] **Stage 5 decisions (user, 2026-11-07; DECISIONS §18):** embeddings via local Ollama `nomic-embed-text`, embeddings only; context cap enforced as ≤ 4,096 UTF-8 bytes of app-assembled messages + tool schemas (gateway overhead traced, not counted).
 
 ## Environment notes
 - Host has only Python 3.14; toolchain runs in Docker (`Dockerfile.dev`, runs as uid 1000).
