@@ -1,0 +1,26 @@
+# Pinned Python 3.12 toolchain for tests, lint and type checks. Source is mounted; no secrets baked in.
+FROM python:3.12-slim-bookworm@sha256:935c3c5b12357a7e10caa9c1e6ca5692344d97cf229832ef584be2cec9fc03df
+
+# Optional package index (e.g. a mirror). Safe because every install below is hash-verified.
+ARG PIP_INDEX_URL=https://pypi.org/simple
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/app \
+    VIRTUAL_ENV=/opt/venv \
+    UV_CACHE_DIR=/opt/uv-cache \
+    UV_LINK_MODE=copy \
+    PATH=/opt/venv/bin:$PATH
+
+COPY docker/uv-requirements.txt /tmp/uv-requirements.txt
+ARG UID=1000
+ARG GID=1000
+RUN pip install --no-cache-dir --require-hashes --index-url "$PIP_INDEX_URL" -r /tmp/uv-requirements.txt \
+    && groupadd --gid "$GID" dev && useradd --uid "$UID" --gid "$GID" --create-home dev \
+    && mkdir -p /opt/venv /opt/uv-cache && chown dev:dev /opt/venv /opt/uv-cache
+
+# Run as the host developer's uid so files written to the mounted source stay theirs.
+USER dev
+RUN uv venv --python /usr/local/bin/python3.12 /opt/venv
+
+WORKDIR /app

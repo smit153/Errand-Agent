@@ -1,0 +1,46 @@
+# Local-only infrastructure. Postgres binds to loopback; nothing is exposed off-host.
+# Image pinned by digest (pgvector 0.8.1 on PostgreSQL 16.12), verified at setup on 2026-11-07.
+name: errand-agent
+
+services:
+  postgres:
+    image: pgvector/pgvector:0.8.1-pg16@sha256:33198da2828a14c30348d2ccb4750833d5ed9a44c88d840a0e523d7417120337
+    environment:
+      POSTGRES_DB: ${ERRAND_DB_NAME:-errand}
+      POSTGRES_USER: ${ERRAND_DB_USER:-errand}
+      POSTGRES_PASSWORD: ${ERRAND_DB_PASSWORD:?set ERRAND_DB_PASSWORD in .env}
+    ports:
+      - "127.0.0.1:${ERRAND_DB_PORT:-5433}:5432"
+    volumes:
+      - errand-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    restart: unless-stopped
+
+  # Toolchain container: `docker compose run --rm dev scripts/check.sh`. Not started by `up`.
+  dev:
+    profiles: ["dev"]
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+      args:
+        PIP_INDEX_URL: ${PIP_INDEX_URL:-https://pypi.org/simple}
+    env_file: .env
+    environment:
+      ERRAND_DB_HOST: postgres
+      ERRAND_DB_PORT: "5432"
+    volumes:
+      - .:/app
+      - errand-venv:/opt/venv
+      - errand-uv-cache:/opt/uv-cache
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  errand-pgdata:
+  errand-venv:
+  errand-uv-cache:

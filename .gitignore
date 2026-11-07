@@ -1,0 +1,19 @@
+# Project-local agent skills and installer; never stage these with git add .
+/.agents/skills/
+/.local-skill-installer/
+/.local/
+.venv/
+__pycache__/
+.pytest_cache/
+*.egg-info/
+.errand/
+*.sqlite*
+*.lock
+# Local secrets; .env.example is the committed template
+.env
+.mypy_cache/
+.ruff_cache/
+# Keep hash-pinned dependency locks despite the *.lock rule above
+!requirements.lock
+!requirements-dev.lock
+.check.log
