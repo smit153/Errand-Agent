@@ -24,6 +24,8 @@ from errand_agent.tools.errors import ToolError, ToolRejectedError
 from errand_agent.tools.models import (
     BookInput,
     BookOutput,
+    CancelInput,
+    CancelOutput,
     GetBookingStatusInput,
     GetBookingStatusOutput,
     GetProviderInput,
@@ -32,6 +34,8 @@ from errand_agent.tools.models import (
     HoldSlotOutput,
     ListBookingsInput,
     ListBookingsOutput,
+    RescheduleInput,
+    RescheduleOutput,
     SearchProvidersInput,
     SearchProvidersOutput,
 )
@@ -65,6 +69,12 @@ class ToolClient:
 
     def get_booking_status(self, ctx: ToolContext, args: dict[str, Any]) -> GetBookingStatusOutput:
         return self._invoke("get_booking_status", GetBookingStatusInput, args, ctx, self._backend.get_booking_status)
+
+    def cancel(self, ctx: ToolContext, args: dict[str, Any]) -> CancelOutput:
+        return self._invoke("cancel", CancelInput, args, ctx, self._backend.cancel)
+
+    def reschedule(self, ctx: ToolContext, args: dict[str, Any]) -> RescheduleOutput:
+        return self._invoke("reschedule", RescheduleInput, args, ctx, self._backend.reschedule)
 
     def list_bookings(self, ctx: ToolContext, args: dict[str, Any]) -> ListBookingsOutput:
         return self._invoke("list_bookings", ListBookingsInput, args, ctx, self._backend.list_bookings)

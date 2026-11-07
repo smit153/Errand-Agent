@@ -34,6 +34,8 @@ from errand_agent.tools.models import (
     BookingRecord,
     BookInput,
     BookOutput,
+    CancelInput,
+    CancelOutput,
     GetBookingStatusInput,
     GetBookingStatusOutput,
     GetProviderInput,
@@ -43,6 +45,8 @@ from errand_agent.tools.models import (
     ListBookingsInput,
     ListBookingsOutput,
     ProviderSummary,
+    RescheduleInput,
+    RescheduleOutput,
     Review,
     SearchProvidersInput,
     SearchProvidersOutput,
@@ -397,6 +401,141 @@ class MockBackend:
                 return _status_by_hold(conn, inp.hold_id, ctx.user_id, now)
         raise ToolRejectedError("get_booking_status", "invalid_arguments", "no lookup key")
 
+    # ------------------------------------------------------------------ cancel
+    def cancel(self, inp: CancelInput, ctx: ToolContext) -> CancelOutput:
+        """First call per key fails with a durable transient 503 (no effect); the retry succeeds."""
+        now = self._clock.now()
+        transient = False
+        with self._db.session_txn(ctx.session_id) as conn:
+            _verify_fence(
+                conn, ctx=ctx, tool="cancel", key=inp.idempotency_key, expected={"booking_id": inp.booking_id}, now=now
+            )
+            _lock_mock(conn)
+            request_hash = _hash(inp.model_dump(mode="json"))
+            replay = _replay(conn, "cancel", inp.idempotency_key, request_hash, now)
+            if replay is not None:
+                return CancelOutput.model_validate(replay)
+            booking = _own_booking(conn, "cancel", inp.booking_id, ctx.user_id)
+            phase = fetch_one(
+                conn,
+                "SELECT calls FROM mock_idempotency WHERE tool = 'cancel' AND key = %s",
+                (inp.idempotency_key,),
+            )
+            if booking["status"] != "confirmed":
+                # Report what we observe (e.g. the provider already cancelled), never claim our own effect.
+                result = CancelOutput(status="not_cancellable", booking_id=inp.booking_id, reason=booking["status"])
+                _remember(
+                    conn,
+                    tool="cancel",
+                    key=inp.idempotency_key,
+                    request_hash=request_hash,
+                    phase="terminal",
+                    result=result,
+                    now=now,
+                )
+                return result
+            if phase is None:
+                conn.execute(
+                    "INSERT INTO mock_idempotency (tool, key, request_hash, phase, calls, created_at, updated_at)"
+                    " VALUES ('cancel', %s, %s, 'transient_failed', 1, %s, %s)",
+                    (inp.idempotency_key, request_hash, now, now),
+                )
+                transient = True
+            elif int(phase["calls"]) <= _load_scenario(conn).cancel_extra_503:
+                conn.execute(
+                    "UPDATE mock_idempotency SET calls = calls + 1, updated_at = %s WHERE tool = 'cancel' AND key = %s",
+                    (now, inp.idempotency_key),
+                )
+                transient = True
+            else:
+                conn.execute(
+                    "UPDATE mock_bookings SET status = 'cancelled', updated_at = %s WHERE id = %s",
+                    (now, inp.booking_id),
+                )
+                result = CancelOutput(status="cancelled", booking_id=inp.booking_id)
+                _remember(
+                    conn,
+                    tool="cancel",
+                    key=inp.idempotency_key,
+                    request_hash=request_hash,
+                    phase="committed",
+                    result=result,
+                    now=now,
+                )
+                return result
+        if transient:  # the phase change above is committed before the client sees the 503
+            raise ToolTransientError("cancel", 503, "provider service temporarily unavailable")
+        raise ToolRejectedError("cancel", "internal", "unreachable cancel state")
+
+    # ------------------------------------------------------------------ reschedule
+    def reschedule(self, inp: RescheduleInput, ctx: ToolContext) -> RescheduleOutput:
+        now = self._clock.now()
+        new_slot = utc(inp.slot)
+        with self._db.session_txn(ctx.session_id) as conn:
+            _verify_fence(
+                conn,
+                ctx=ctx,
+                tool="reschedule",
+                key=inp.idempotency_key,
+                expected={"booking_id": inp.booking_id, "slot": new_slot},
+                now=now,
+            )
+            _lock_mock(conn)
+            request_hash = _hash(inp.model_dump(mode="json"))
+            replay = _replay(conn, "reschedule", inp.idempotency_key, request_hash, now)
+            if replay is not None:
+                return RescheduleOutput.model_validate(replay)
+            booking = _own_booking(conn, "reschedule", inp.booking_id, ctx.user_id)
+            old_slot: datetime = booking["slot"]
+            result: RescheduleOutput
+            if booking["status"] != "confirmed":
+                result = RescheduleOutput(
+                    status="not_reschedulable", booking_id=inp.booking_id, old_slot=old_slot, reason=booking["status"]
+                )
+            elif self._conflicts(conn, booking, new_slot, now):
+                result = RescheduleOutput(
+                    status="slot_conflict", booking_id=inp.booking_id, old_slot=old_slot, reason="slot unavailable"
+                )
+            else:
+                conn.execute(
+                    "UPDATE mock_bookings SET slot = %s, updated_at = %s WHERE id = %s", (new_slot, now, inp.booking_id)
+                )
+                result = RescheduleOutput(
+                    status="rescheduled", booking_id=inp.booking_id, old_slot=old_slot, new_slot=new_slot
+                )
+            _remember(
+                conn,
+                tool="reschedule",
+                key=inp.idempotency_key,
+                request_hash=request_hash,
+                phase="committed" if result.status == "rescheduled" else "terminal",
+                result=result,
+                now=now,
+            )
+        return result
+
+    def _conflicts(self, conn: Conn, booking: dict[str, Any], new_slot: datetime, now: datetime) -> bool:
+        configured = {utc(s) for s in _load_scenario(conn).reschedule_conflict_slots}
+        if new_slot in configured or new_slot <= now:
+            return True
+        provider = fetch_one(conn, "SELECT * FROM mock_providers WHERE id = %s", (booking["provider_id"],))
+        if provider is None or not is_schedule_slot(provider, new_slot):
+            return True
+        return (booking["provider_id"], new_slot) in _busy_slots(conn, [booking["provider_id"]], now)
+
+    # ------------------------------------------------------------------ simulated provider events
+    def simulate_provider_cancellation(self, booking_id: str) -> None:
+        """Test/demo control (not a tool): the provider cancels a confirmed booking."""
+        with self._db.txn() as conn:
+            _lock_mock(conn)
+            updated = conn.execute(
+                "UPDATE mock_bookings SET status = 'cancelled_by_provider', updated_at = %s"
+                " WHERE id = %s AND status = 'confirmed'",
+                (self._clock.now(), booking_id),
+            ).rowcount
+        if updated != 1:
+            raise ToolRejectedError("simulate_provider_cancellation", "not_found", booking_id)
+
 
 # ---------------------------------------------------------------------- helpers
 def _load_scenario(conn: Conn) -> ScenarioConfig:
@@ -596,3 +735,12 @@ def _status_from_result(result: BookOutput) -> GetBookingStatusOutput:
             price_inr=result.price_inr,
         )
     return GetBookingStatusOutput(status=result.status, hold_id=result.hold_id)
+
+
+def _own_booking(conn: Conn, tool: str, booking_id: str, user_id: str) -> dict[str, Any]:
+    row = fetch_one(
+        conn, "SELECT * FROM mock_bookings WHERE id = %s AND user_id = %s FOR UPDATE", (booking_id, user_id)
+    )
+    if row is None:
+        raise ToolRejectedError(tool, "not_found", booking_id)
+    return row

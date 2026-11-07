@@ -11,12 +11,15 @@
 - [x] 1c Claims with generation fencing; tests for rollback, lock timeout → SessionBusy, lock serialization, unrelated sessions independent, concurrent claim (exactly one of 6 wins), expired-lease takeover fences old holder, stale release is a no-op.
 - Gate result: **15 passed**; ruff/format/mypy strict clean.
 
-## Stage 2 — exact mock tools (in progress)
+## Stage 2 — exact mock tools ✅
 - [x] 2a Tool contract models (extra=forbid inputs), errors with effect knowledge (none/unknown), internal ToolContext/Fence; deterministic seeded catalog (3–8 providers per service×area, injection review on each pair's cheapest), demo history; search/get_provider/list_bookings; ToolClient validation + per-call sanitized trace with latency. Tests: 28 passed.
 - [x] 2b hold_slot (10 min, configurable quote drift, schedule/availability checks), book (70/15/15 with half of timeouts booked; forced-outcome FIFO; hold_expired), get_booking_status by hold or key (authoritative; configurable 503s); durable seeded RNG/IDs survive restart; replay records commit with effects; backend fencing (claim generation + reserved attempt + snapshot/key match). Tests: 56 passed.
-- [ ] 2c cancel (first call 503 per key, durable phase), reschedule (configured slot_conflict).
+- [x] 2c cancel (first call per key → durable transient 503 with no effect, same-key retry succeeds, configurable extra faults, provider-cancelled state reported as observed), reschedule (configured/unavailable/off-schedule/past → slot_conflict preserving the original; replay), `simulate_provider_cancellation` control. Tests: 68 passed. Gate E41 + backend parts of E08–E15 covered.
 
-## Stage 3 — approval + journal + booking recovery (not started)
+## Stage 3 — approval + journal + booking recovery (in progress)
+- [ ] 3a State machine, immutable proposal revisions, display receipts, both confirmation forms, atomic approval→operation.
+- [ ] 3b Executor: stable keys, attempt reservations, run/lifetime budgets, exact-snapshot dispatch (G7).
+- [ ] 3c Forced timeout reconciliation, repeated-confirmation replay, crash points/recovery, two-worker races.
 
 ## Environment notes
 - Host has only Python 3.14; toolchain runs in Docker (`Dockerfile.dev`, runs as uid 1000).
