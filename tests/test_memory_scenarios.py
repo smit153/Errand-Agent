@@ -27,6 +27,7 @@ from errand_agent.workflow.memory_commands import MemoryCommand, parse_earliest,
 from errand_agent.workflow.parsing import LOCAL_TZ
 from errand_agent.workflow.ranking import RankedOption
 from tests.conftest import T0
+from tests.helpers import count
 from tests.memory_helpers import HashEmbedder, succeeded_booking
 from tests.test_agent_scenarios import PLUMBER, SEARCH_TO_CARD, Chat, comply, extract
 
@@ -399,3 +400,23 @@ def test_earliest_time_parsing(text: str, expected: time | None) -> None:
     assert (got.earliest if got else None) == expected
     if got is not None:
         assert got == EarliestTimeValue(earliest=expected)
+
+
+@pytest.mark.invariant
+def test_bug010_restating_a_saved_default_keeps_the_card(chat: Chat) -> None:
+    _remember_indiranagar(chat)
+    later = chat.new_session()
+    card = later.say(
+        PLUMBER_NO_AREA,
+        extract(intent="book", service="plumber", date_expression="this week", budget_expression="under ₹1,500"),
+        *SEARCH_TO_CARD,
+    )
+    assert card.state == "awaiting_approval"
+    receipt = later.receipt
+    holds = count(chat.db, "SELECT count(*) FROM mock_holds")
+    same = later.say("Indiranagar", extract(area="indiranagar"))  # what the card was already built from
+    assert same.state == "awaiting_approval"
+    assert "no longer applies" not in later.text(same)
+    assert later.receipt == receipt  # the displayed card is still the one to approve
+    assert count(chat.db, "SELECT count(*) FROM mock_holds") == holds  # no re-plan, no extra hold
+    assert count(chat.db, "SELECT count(*) FROM proposals WHERE status = 'pending'") == 1

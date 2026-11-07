@@ -35,6 +35,12 @@ class Settings(BaseSettings):
     embed_model: str = "nomic-embed-text:v1.5"
     embed_digest: str | None = None  # when set, a different installed build is refused
 
+    # Local HTTP API (stage 8): loopback only, one local user.
+    api_host: str = "127.0.0.1"
+    api_port: int = Field(default=8765, ge=1, le=65535)
+    local_user: str = "user-demo"
+    demo_controls: bool = False  # test/demo endpoints that steer the mocks; off unless asked for
+
     lock_timeout_ms: int = Field(default=2000, ge=1, le=2000)
     statement_timeout_ms: int = Field(default=5000, ge=1)
     claim_lease_seconds: int = Field(default=60, ge=1)

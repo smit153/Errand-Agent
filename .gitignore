@@ -17,3 +17,6 @@ __pycache__/
 !requirements.lock
 !requirements-dev.lock
 .check.log
+
+# Assistant transcript export: review before sharing (may contain personal details).
+artifacts/transcript/

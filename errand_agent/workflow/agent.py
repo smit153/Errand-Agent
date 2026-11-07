@@ -250,6 +250,7 @@ class Agent:
         if "intent" in changed:
             ws = Workspace(seen_provider_names=ws.seen_provider_names)
         if sess.state == "awaiting_approval":
+            changed -= self._restated(sess.id, req, changed)
             if not changed and not clarifications:
                 self._remember_provider(run, turn, sess, ext, text)
                 turn.messages.append(templates.KEEP_CARD)
@@ -282,6 +283,21 @@ class Agent:
         self._remember_provider(run, turn, sess, ext, text)
 
     # ================================================================== planning
+    def _restated(self, session_id: int, req: RequestFacts, changed: set[str]) -> set[str]:
+        """Fields the user "changed" to exactly what the pending card was built from (e.g. a saved
+        default they now state themselves). Not a material change, so the card stays (BUG-010)."""
+        fields = changed & {"area", "date", "time", "budget"}
+        if not fields:
+            return set()
+        with self._db.txn() as conn:
+            row = fetch_one(
+                conn, "SELECT constraints FROM proposals WHERE session_id = %s AND status = 'pending'", (session_id,)
+            )
+        if row is None or not row["constraints"]:
+            return set()
+        now = request_constraints(req)
+        return {f for f in fields if now.get(f) == row["constraints"].get(f)}
+
     def _plan(self, run: Run, turn: _Turn, clarifications: list[Clarification]) -> None:
         self._move(run, "collecting", "planning")
         if self._load(run).request.intent == "book":

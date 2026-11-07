@@ -286,7 +286,7 @@ This table covers PDF §§1–5, including individual failure modes and delivera
 | §5 3–5 minute full-booking demo, chat/trace side by side | §§8,13,15 | E45 recording duration/content review; live failure desirable |
 | §5 coding-assistant transcript | §§13,15 | E45 retained/exported conversation artifact |
 
-## 15. Risk-ordered build plan — approved; stages 1–7 done (see PROGRESS.md)
+## 15. Risk-ordered build plan — approved; all 8 stages done (see PROGRESS.md)
 
 Each numbered stage is split into reviewable tasks. Run its acceptance checks before proceeding; update PROGRESS.md and HANDOFF.md after every task. Tracing hooks and minimal journal events start with persistence/recovery even though the full exporter/eval report is stage 7. Use direct workflow/test harness calls until stage 8; no UI dependency blocks safety validation.
 
@@ -364,6 +364,7 @@ The alternatives the user was shown were a proxy tokenizer (tiktoken o200k) and 
 - **Failed status checks are spread out** (BUG-008): at most 2 back-to-back per drive, then a follow-up every 30 s, within the lifetime cap of 6. The user gets a final "still can't confirm" notice when follow-ups stop.
 - **Provider cancellations** come from a simulated provider event feed (`mock_provider_events`, written only by the simulation control), and are always confirmed with `list_bookings` before anything happens. The watcher is deterministic, with no second LLM agent. The replacement search uses the same day, the constraints the original card was approved under (kept with the proposal and operation), confirmed saved preferences for bookings made elsewhere, and never the provider who cancelled. It runs in a new follow-up conversation so it can't disturb one in progress. The card goes out through the outbox; its display receipt is recorded when the client fetches it, and approval is always fresh. Nothing is rebooked automatically, and a no-match explains why without loosening any constraint.
 - **Notifications** are at-least-once with stable IDs (`event_key` per operation+status or per event); only the owner can acknowledge. Clients de-duplicate by ID.
+- **Known limit (holds):** the fixed tools have no way to release a hold, so after a genuine change our own earlier hold can hide that slot from the next search until it expires (10 minutes). Restating a value the card was built from is not a change (BUG-010).
 - **Known limit:** a crash after a replacement hold but before the card can leave one extra hold, which expires by itself in 10 minutes and never becomes a booking.
 
 ## Appendix A — v1 decisions (superseded historical record)

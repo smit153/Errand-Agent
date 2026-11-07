@@ -1,12 +1,12 @@
 # Handoff
 
-## Current checkpoint — stage 7 done; stage 8 next (2026-11-08)
+## Current checkpoint — all 8 stages done (2026-11-08)
 
-The user said "continue to stage 7" and then "do 8 as well, don't wait for me". Stages 1–7 done; 394 offline tests + 2 live Ollama tests pass. Stage 7: trace export, real Codex timeout-after-success trace (`scripts/evidence.sh codex`), generated eval table (37 scenarios, `tests/eval_report.py`), one-page DESIGN.md with the real excerpt (`scripts/design_pages.py` → 1 A4 page), BUG-009 found from the trace and fixed. 9 bugs logged; three highlighted.
+The user asked to continue through stages 7 and 8 without waiting. All 8 stages are done; 413 offline tests + 2 live Ollama tests pass; the generated eval table has 37/37 scenarios. Stage 8: local HTTP API (`errand_agent/api/`), stdlib-only CLI (`errand_agent/cli.py`), `errand_agent/serve.py` + `scripts/serve.sh`, shared `scripts/with_model.sh`, `docs/DEMO.md`, transcript exporter. A live run with Codex through the CLI found BUG-010 (restated default discarded the card) and the reconnect/receipt gap (fixed with `GET /sessions/{id}/card`). 10 bugs logged; three highlighted.
 
-Running things from this shell: Docker via `wsl.exe --distribution Ubuntu --user laptop --cd <repo> --exec bash -c '...'`. Ollama: `docker compose --profile embed up -d --wait ollama`. Never read or print the ModelMux key. Claude provider is still not logged in.
+Left for the user: record the 3–5 minute demo following docs/DEMO.md; review `artifacts/transcript/*.md` (git-ignored; contains the user's name in places) and include it; optionally `modelmux login claude` then `scripts/smoke.sh claude`.
 
-Next: stage 8 — local HTTP API (sessions, messages with display receipts, notifications, traces; local user; request dedupe) + thin terminal client (chat + trace pane, notifications), clean-checkout README/setup, demo script for the 3–5 minute recording (the user records it), transcript export. Commits: no AI attribution lines.
+Running things from this shell: Docker via `wsl.exe --distribution Ubuntu --user laptop --cd <repo> --exec bash -c '...'`; zsh here doesn't word-split variables (use functions). Never read or print the ModelMux key. Commits: no AI attribution lines.
 
 ## Earlier checkpoint — stages 1–3 done and reviewed; pre-stage-4 requests handled (2026-11-07)
 

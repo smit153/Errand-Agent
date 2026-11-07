@@ -161,3 +161,21 @@ test now guards against regression. Entries are added as bugs are encountered, n
 - **Regression test:** `tests/test_context.py::test_e22_at_most_four_embedding_requests_per_run`
   now asserts the run counters equal the embedder's actual request count (verified to fail
   without the fix).
+
+## BUG-010 — restating a saved default threw away the approval card
+
+- **Found:** 2026-11-08, stage 8, in a live run with the real model through the CLI: the saved
+  area (Indiranagar) was applied as a default, then the user typed "Indiranagar".
+- **What broke:** the extraction set `area`, which differed from the stored request (where the
+  default is deliberately not written), so it counted as a material change. The card was
+  invalidated and re-planned. Worse, our own 10-minute hold on the cheapest slot then made that
+  slot unavailable, so the user got a pricier card (₹850 instead of ₹600) for restating what was
+  already in effect.
+- **Why:** "changed" compared against the stored request, not against what the displayed card
+  was built from.
+- **Fix:** while a card is pending, a field set to exactly the value in the card's stored
+  constraints is not a change (`Agent._restated`). Genuine changes still invalidate the card.
+- **Regression test:** `tests/test_memory_scenarios.py::test_bug010_restating_a_saved_default_keeps_the_card`
+  (same receipt still valid, no extra hold, one pending card; verified failing before the fix).
+- **Known limit, recorded in DECISIONS §19:** after a genuine change, our own earlier hold can
+  still hide that slot until it expires (there is no release-hold tool in the fixed contracts).
