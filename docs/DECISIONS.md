@@ -286,7 +286,7 @@ This table covers PDF §§1–5, including individual failure modes and delivera
 | §5 3–5 minute full-booking demo, chat/trace side by side | §§8,13,15 | E45 recording duration/content review; live failure desirable |
 | §5 coding-assistant transcript | §§13,15 | E45 retained/exported conversation artifact |
 
-## 15. Risk-ordered build plan — approved; stages 1–6 done (see PROGRESS.md)
+## 15. Risk-ordered build plan — approved; stages 1–7 done (see PROGRESS.md)
 
 Each numbered stage is split into reviewable tasks. Run its acceptance checks before proceeding; update PROGRESS.md and HANDOFF.md after every task. Tracing hooks and minimal journal events start with persistence/recovery even though the full exporter/eval report is stage 7. Use direct workflow/test harness calls until stage 8; no UI dependency blocks safety validation.
 

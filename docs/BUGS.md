@@ -1,5 +1,20 @@
 # Real bugs hit while building
 
+**The three highlighted for the assignment (PDF §5)** — each found while building, fixed, and guarded
+by a regression test that fails without the fix:
+
+1. **BUG-002 — a timed-out booking could never be retried.** An attempt whose outcome was unknown was
+   never marked reconciled, so after the status check said "not booked" the same-key retry never
+   happened. Fixed with an explicit `reconciled` attempt state (migration 0002).
+2. **BUG-008 — a status-service outage spent every verification at once.** The executor re-checked
+   `get_booking_status` in a tight loop until all 6 lifetime checks were gone, leaving a possibly-made
+   booking unverifiable. Now 2 per attempt, then a queued follow-up every 30 s.
+3. **BUG-007 — a retry job blocked its own continuation.** A second 503 on a background cancel left
+   the operation in `retry_wait` with nothing scheduled to retry it. Jobs now hand over to their
+   successor in the same transaction.
+
+All bugs found so far follow, in the order they were hit.
+
 Each entry was caught by an automated test that failed before the fix and passes after it; that
 test now guards against regression. Entries are added as bugs are encountered, not reconstructed.
 
@@ -130,3 +145,19 @@ test now guards against regression. Entries are added as bugs are encountered, n
   (2 checks per drive, a follow-up queued, 6 in total across drives) and
   `tests/test_jobs.py::test_pending_verification_is_followed_up_until_resolved` /
   `test_follow_ups_stop_at_the_lifetime_limit_and_say_so`.
+
+## BUG-009 — the trace under-reported embedding requests
+
+- **Found:** 2026-11-08, stage 7b, reading the real timeout-after-success trace: the run made an
+  embedding request (`memory.retrieved`) but `run.ended` reported `embedding_calls: 0`.
+- **What broke:** the per-run cap of 4 embedding requests was enforced inside the embedder
+  wrapper, but the run's durable `embedding_calls` counter was never charged. The limit held, but
+  the trace's usage figures were wrong, which matters because the PDF asks the trace to report
+  usage.
+- **Why:** stage 5c added an in-memory budget for embeddings, alongside the run counters,
+  instead of going through `reserve_run` like model and tool calls.
+- **Fix:** `BudgetedEmbedder(charge=...)` reserves the run's `embedding_calls` counter for each
+  request (a refusal becomes "embedder unavailable", so memory degrades explicitly).
+- **Regression test:** `tests/test_context.py::test_e22_at_most_four_embedding_requests_per_run`
+  now asserts the run counters equal the embedder's actual request count (verified to fail
+  without the fix).

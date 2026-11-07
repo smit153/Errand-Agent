@@ -63,6 +63,12 @@ def _remember_indiranagar(chat: Chat) -> None:
 
 # ------------------------------------------------------------------ E19: explicit preferences across sessions
 @pytest.mark.invariant
+@pytest.mark.scenario(
+    "S18",
+    "Stated preferences are reused in a later session",
+    expected="Saved as explicit; next session uses them as visible defaults; area not re-asked",
+    covers="PDF §3 persistent memory across sessions; E19",
+)
 def test_e19_explicit_preferences_are_reused_in_a_later_session(chat: Chat) -> None:
     saved = chat.say(
         "Please remember my area is Indiranagar, and from now on not before 10 a.m.",
@@ -123,6 +129,13 @@ def test_e19_what_the_user_says_now_overrides_a_saved_preference(chat: Chat) -> 
 
 # ------------------------------------------------------------------ E19: inferred suggestions need confirmation
 @pytest.mark.invariant
+@pytest.mark.scenario(
+    "S19",
+    "Preference inferred from bookings",
+    expected="Saved as an unconfirmed inferred suggestion; unused until the user confirms; then "
+    "applied, still marked inferred",
+    covers="PDF §3 explicit vs inferred; E19",
+)
 def test_e19_inferred_suggestion_is_unused_until_confirmed(chat: Chat, backend: MockBackend, db: Database) -> None:
     for days in (21, 14):  # two earlier completed bookings with the same plumber, 11:00 local
         succeeded_booking(
@@ -204,6 +217,13 @@ def test_e19_inferred_suggestion_is_unused_until_confirmed(chat: Chat, backend: 
 
 # ------------------------------------------------------------------ E20: correct and forget
 @pytest.mark.invariant
+@pytest.mark.scenario(
+    "S20",
+    "User corrects, then forgets a saved preference",
+    expected="Correction used next session; after forgetting, the area is asked again and the old "
+    "values never reach the model",
+    covers="PDF §3 inspect/correct/forget; E20",
+)
 def test_e20_correct_then_forget_apply_from_the_next_turn(chat: Chat) -> None:
     _remember_indiranagar(chat)
     before = len(chat.model.requests)
@@ -303,6 +323,12 @@ def test_embedder_outage_saves_nothing_usable(chat: Chat, db: Database, clock: F
 
 # ------------------------------------------------------------------ E40: memory poisoning is rejected
 @pytest.mark.invariant
+@pytest.mark.scenario(
+    "S21",
+    "Model tries to save a memory the user didn't ask for",
+    expected="Rejected by the semantic check; nothing stored",
+    covers="PDF §3 untrusted input can't alter state; E40",
+)
 def test_e40_model_cannot_save_memory_the_user_did_not_ask_for(chat: Chat) -> None:
     card = chat.say(
         PLUMBER_IN_AREA,

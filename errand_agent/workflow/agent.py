@@ -54,7 +54,7 @@ from errand_agent.tools.models import AREAS, BookingRecord, ProviderSummary
 from errand_agent.workflow import agent_tools as at
 from errand_agent.workflow import templates
 from errand_agent.workflow.approval import ApprovalGate, parse_confirmation
-from errand_agent.workflow.budget import Run, RunLimits, RunManager, reserve_run
+from errand_agent.workflow.budget import Run, RunCounter, RunLimits, RunManager, reserve_run
 from errand_agent.workflow.executor import ExecutionOutcome, OperationExecutor, ProposedCall
 from errand_agent.workflow.memory_commands import (
     PROVIDER_ID,
@@ -94,7 +94,6 @@ PHRASE_POLICY = (
     "Write one short, friendly question asking the user for the listed details. Do not state any prices, "
     "numbers, dates, times, providers, IDs or booking status."
 )
-EMBED_REQUESTS_PER_RUN = 4  # DECISIONS §2
 MEMORY_FIELDS_BY_INTENT: dict[str, tuple[Any, ...]] = {
     "book": ("area", "earliest_time", "preferred_provider", "note"),
     "reschedule": ("earliest_time", "note"),
@@ -156,6 +155,7 @@ class Agent:
         self.executor = OperationExecutor(db, clock, tools)
         self.caller = ModelCaller(db, clock, model)
         limits = run_limits or RunLimits()
+        self._limits = limits
         self.claims = ClaimManager(db, clock, lease_seconds=limits.active_seconds + 30)
         self.runs = RunManager(db, clock, limits)
 
@@ -167,7 +167,13 @@ class Agent:
             return AgentReply(messages=[exc.user_message], state=self._state(session_id))
         run = self.runs.start(claim)
         turn = _Turn(
-            self.memory.with_embedder(BudgetedEmbedder(self.memory.embedder, limit=EMBED_REQUESTS_PER_RUN))
+            self.memory.with_embedder(
+                BudgetedEmbedder(
+                    self.memory.embedder,
+                    limit=self._limits.embedding_calls,
+                    charge=lambda: self._reserve(run, "embedding_calls"),  # counted in the run (BUG-009)
+                )
+            )
             if self.memory is not None
             else None
         )
@@ -953,8 +959,11 @@ class Agent:
         return str(row["state"]) if row else "unknown"
 
     def _reserve_tool(self, run: Run) -> None:
+        self._reserve(run, "tool_invocations")
+
+    def _reserve(self, run: Run, counter: RunCounter) -> None:
         with self._db.session_txn(run.session_id) as conn:
-            reserve_run(conn, run, "tool_invocations", self._clock.now())
+            reserve_run(conn, run, counter, self._clock.now())
 
     def _ctx(self, run: Run) -> ToolContext:
         return ToolContext(user_id=self._load(run).user_id, session_id=run.session_id, run_id=run.id)

@@ -52,5 +52,6 @@ testpaths = ["tests"]
 addopts = "-ra --strict-markers -m 'not ollama'"
 markers = [
     "invariant: safety-critical invariant test (approval, idempotency, recovery, guardrails)",
+    "scenario(id, title, expected, covers): simulated-user scenario reported in the generated eval table",
     "ollama: needs a local Ollama with the pinned embedding model; deselected by default, run with -m ollama",
 ]

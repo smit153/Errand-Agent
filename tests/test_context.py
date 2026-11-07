@@ -94,6 +94,13 @@ def test_e21_seed_has_fifty_plus_memories_in_every_state_and_a_long_history(seed
 
 
 @pytest.mark.invariant
+@pytest.mark.scenario(
+    "S22",
+    "57 seeded memories and 240 prior messages",
+    expected="Only relevant, current, confirmed memories reach the model; no "
+    "forgotten/unconfirmed/stale/other-user facts; no prior chat",
+    covers="PDF §3 context management; E21",
+)
 def test_e21_only_relevant_current_confirmed_memories_reach_the_model(seeded: Chat, db: Database) -> None:
     card = seeded.say(PLUMBER, PLUMBER_EXTRACT, *SEARCH_TO_CARD)
     assert card.state == "awaiting_approval"
@@ -134,6 +141,12 @@ def test_e21_only_relevant_current_confirmed_memories_reach_the_model(seeded: Ch
 
 
 @pytest.mark.invariant
+@pytest.mark.scenario(
+    "S23",
+    "The context sent each turn is logged",
+    expected="Every model call's logged messages/tools equal what the model received, with byte counts",
+    covers="PDF §3 log context each turn and prove it; E21",
+)
 def test_e21_the_logged_context_is_exactly_what_the_model_received(seeded: Chat, db: Database) -> None:
     seeded.say(PLUMBER, PLUMBER_EXTRACT, *SEARCH_TO_CARD)
     payloads = _model_call_payloads(db, seeded.ctx.session_id)
@@ -146,6 +159,12 @@ def test_e21_the_logged_context_is_exactly_what_the_model_received(seeded: Chat,
 
 # ------------------------------------------------------------------ E22
 @pytest.mark.invariant
+@pytest.mark.scenario(
+    "S24",
+    "Long reviews and many memories compete for space",
+    expected="Every request within the 4,096-byte cap; reviews dropped before memories",
+    covers="PDF §3 fixed context budget; E22",
+)
 def test_e22_every_request_fits_the_cap_with_room_for_a_retry(seeded: Chat, db: Database) -> None:
     with db.txn() as conn:  # long reviews put pressure on the review section
         for i in range(8):
@@ -170,6 +189,12 @@ def test_e22_every_request_fits_the_cap_with_room_for_a_retry(seeded: Chat, db: 
 
 
 @pytest.mark.invariant
+@pytest.mark.scenario(
+    "S25",
+    "User sends a message too long for the budget",
+    expected="Refused with a clear message; no model call; nothing changed",
+    covers="PDF §3 context budget, adversarial input; E22",
+)
 def test_e22_an_oversized_message_is_refused_before_any_model_call(seeded: Chat, db: Database) -> None:
     huge = "Find a plumber for my kitchen tap, " + "it is really very urgent and " * 120
     reply = seeded.say(huge)
@@ -198,7 +223,10 @@ def test_e22_at_most_four_embedding_requests_per_run(seeded: Chat) -> None:
     assert isinstance(emb, TopicEmbedder)
     before = emb.calls
     seeded.say(PLUMBER, PLUMBER_EXTRACT, *SEARCH_TO_CARD)
-    assert 1 <= emb.calls - before <= 4
+    made = emb.calls - before
+    assert 1 <= made <= 4
+    # BUG-009: every embedding request is also charged to the run, so the trace's counters are true.
+    assert count(seeded.db, "SELECT coalesce(sum(embedding_calls), 0) FROM runs") == made
 
 
 def test_unavailable_embedder_means_no_memories_not_a_failure(seeded: Chat, db: Database) -> None:

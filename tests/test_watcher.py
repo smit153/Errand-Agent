@@ -119,6 +119,13 @@ def only(notes: list[Notification]) -> Notification:
 
 
 # ------------------------------------------------------------------ E24: replacement within constraints
+@pytest.mark.scenario(
+    "S26",
+    "A booked provider cancels (simulated event)",
+    expected="Detected without a user message; replacement within the original constraints, never the "
+    "same provider; booked only after fresh approval",
+    covers="PDF §3 proactive follow-up; E24",
+)
 def test_e24_cancellation_is_detected_and_a_replacement_needs_fresh_approval(env: Env) -> None:
     booking = book_plumber(
         env, "Find a plumber for my kitchen tap this week, mornings only, under ₹1,500.", "under ₹1,500"
@@ -162,6 +169,12 @@ def test_e24_cancellation_is_detected_and_a_replacement_needs_fresh_approval(env
     )
 
 
+@pytest.mark.scenario(
+    "S36",
+    "A provider cancels and nothing else fits",
+    expected="User notified with the reasons; nothing loosened; no card",
+    covers="PDF §3 proactive follow-up; E24",
+)
 def test_e24_no_replacement_within_constraints_is_explained_not_loosened(env: Env) -> None:
     booking = book_plumber(env, "Find a plumber for my kitchen tap this week, mornings only, under ₹600.", "under ₹600")
     env.backend.simulate_provider_cancellation(booking)
@@ -234,6 +247,12 @@ def test_an_event_for_a_booking_that_is_still_active_changes_nothing(env: Env) -
     )
 
 
+@pytest.mark.scenario(
+    "S37",
+    "The same cancellation is delivered three times",
+    expected="One event, one follow-up, one notification; redelivered with a stable ID until acknowledged",
+    covers="PDF §3 proactive follow-up; E44",
+)
 def test_e44_duplicate_deliveries_make_one_event_one_follow_up_one_notification(env: Env) -> None:
     env.backend.simulate_provider_cancellation(AC_BOOKING, events=3)
     assert env.watcher.ingest() == 1

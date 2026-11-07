@@ -1,12 +1,12 @@
 # Handoff
 
-## Current checkpoint — stage 6 done (2026-11-08)
+## Current checkpoint — stage 7 done; stage 8 next (2026-11-08)
 
-Stages 1–6 done; 385 offline tests + 2 live Ollama tests pass. Stage 6: job queue (`errand_agent/queue.py`), worker (`workers/jobs.py`), outbox (`workers/outbox.py`), provider-cancellation watcher (`workers/watcher.py`), runner + `python -m errand_agent.workers`, `runtime.py` (refuses a database with pending migrations). Migrations 0005/0006. Real bugs BUG-007 (job blocked its own continuation) and BUG-008 (status outage spent all reconciliations at once). DECISIONS §19 records the stage-6 choices.
+The user said "continue to stage 7" and then "do 8 as well, don't wait for me". Stages 1–7 done; 394 offline tests + 2 live Ollama tests pass. Stage 7: trace export, real Codex timeout-after-success trace (`scripts/evidence.sh codex`), generated eval table (37 scenarios, `tests/eval_report.py`), one-page DESIGN.md with the real excerpt (`scripts/design_pages.py` → 1 A4 page), BUG-009 found from the trace and fixed. 9 bugs logged; three highlighted.
 
-Running things from this shell: Docker via `wsl.exe --distribution Ubuntu --user laptop --cd <repo> --exec bash -c '...'`. Ollama: `docker compose --profile embed up -d --wait ollama` (dev container reaches it as `ollama`). Never read or print the ModelMux key. Claude provider is still not logged in.
+Running things from this shell: Docker via `wsl.exe --distribution Ubuntu --user laptop --cd <repo> --exec bash -c '...'`. Ollama: `docker compose --profile embed up -d --wait ollama`. Never read or print the ModelMux key. Claude provider is still not logged in.
 
-Next: stage 7 — trace export (raw file for a run including timeout-after-success), generated eval table (scenario · expected · actual · pass/fail · notes) from the test run, annotated trace excerpt and one-page check of DESIGN.md, "three real bugs" write-up (8 logged in BUGS.md). Then stage 8: FastAPI + thin CLI (chat + live trace, notifications), README/demo. Commits: no AI attribution lines.
+Next: stage 8 — local HTTP API (sessions, messages with display receipts, notifications, traces; local user; request dedupe) + thin terminal client (chat + trace pane, notifications), clean-checkout README/setup, demo script for the 3–5 minute recording (the user records it), transcript export. Commits: no AI attribution lines.
 
 ## Earlier checkpoint — stages 1–3 done and reviewed; pre-stage-4 requests handled (2026-11-07)
 

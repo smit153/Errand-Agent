@@ -24,6 +24,8 @@ from errand_agent.mocks.catalog import DEMO_USER
 from errand_agent.tools.client import ToolClient
 from errand_agent.tools.context import ToolContext
 
+pytest_plugins = ["tests.eval_report"]
+
 # Friday 6 November 2026, 08:00 Asia/Kolkata (02:30 UTC).
 T0 = datetime(2026, 11, 6, 2, 30, tzinfo=UTC)
 

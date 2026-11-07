@@ -9,8 +9,10 @@ validated (dimension, finite values) and unit-normalized before it is stored or 
 from __future__ import annotations
 
 import math
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from typing import Literal, Protocol
+
+from errand_agent.errors import BudgetExhaustedError
 
 DIMENSIONS = 768
 Kind = Literal["query", "document"]
@@ -94,9 +96,11 @@ class BudgetedEmbedder:
     """Per-run wrapper: at most `limit` embedding requests per run (DECISIONS §2); repeated
     query texts reuse the vector already computed in this run."""
 
-    def __init__(self, base: Embedder, *, limit: int = 4) -> None:
+    def __init__(self, base: Embedder, *, limit: int = 4, charge: Callable[[], None] | None = None) -> None:
+        """`charge` records each request against the run (and may refuse it by raising)."""
         self._base = base
         self._limit = limit
+        self._charge = charge
         self.requests = 0
         self._queries: dict[str, list[float]] = {}
 
@@ -109,6 +113,11 @@ class BudgetedEmbedder:
             return [self._queries[t] for t in texts]
         if self.requests >= self._limit:
             raise EmbeddingUnavailableError(f"per-run embedding limit of {self._limit} requests reached")
+        if self._charge is not None:
+            try:
+                self._charge()
+            except BudgetExhaustedError as exc:
+                raise EmbeddingUnavailableError(f"run limit reached: {exc.limit}") from exc
         self.requests += 1
         vectors = [validate_vector(v) for v in self._base.embed(texts, kind=kind)]
         if len(vectors) != len(texts):

@@ -5,6 +5,8 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 provider="${1:-claude}"
+module="${ERRAND_REAL_MODEL_MODULE:-errand_agent.smoke}"
+case "$module" in errand_agent.smoke|errand_agent.evidence) ;; *) echo "unknown module $module" >&2; exit 2 ;; esac
 case "$provider" in claude|codex) ;; *) echo "usage: scripts/smoke.sh [claude|codex]" >&2; exit 2 ;; esac
 ERRAND_MODELMUX_API_KEY="$(scripts/modelmux_key.sh "$HOME/.config/modelmux/secrets.env")"
 export ERRAND_MODELMUX_API_KEY ERRAND_MODELMUX_PROVIDER="$provider"
@@ -13,4 +15,4 @@ docker compose --profile dev build -q dev
 exec docker run --rm --network host --user "$(id -u):$(id -g)" \
   --env-file .env -e ERRAND_MODELMUX_API_KEY -e ERRAND_MODELMUX_PROVIDER -e ERRAND_DB_HOST=127.0.0.1 \
   -v "$PWD":/app -v errand-agent_errand-venv:/opt/venv -v errand-agent_errand-uv-cache:/opt/uv-cache \
-  errand-agent-dev bash -c 'uv pip sync --require-hashes --quiet requirements-dev.lock && python -m errand_agent.smoke'
+  errand-agent-dev bash -c "uv pip sync --require-hashes --quiet requirements-dev.lock && python -m $module"
