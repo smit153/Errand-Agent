@@ -9,7 +9,9 @@ and a semantic check. Valid syntax never grants authority; nothing here executes
 if either output fails grounding, the code template is used. No hidden retry multiplication.
 
 Every physical request reserves run counters (and, for an operation, its lifetime model-call
-allowance) before it is sent, and is traced with the exact context, tools and options.
+allowance) before it is sent, and is traced with the exact context, tools and options. No
+request larger than the fixed context cap (`llm/context.py`, 4,096 bytes) is ever sent; retry
+diagnostics are bounded so a repair request stays inside the reserve the prompt left for it.
 """
 
 from __future__ import annotations
@@ -27,6 +29,14 @@ from errand_agent import trace
 from errand_agent.clock import Clock
 from errand_agent.db import Database
 from errand_agent.errors import BudgetExhaustedError, ErrandError
+from errand_agent.llm.context import (
+    CAP_BYTES,
+    DIAGNOSTIC_PROBLEM_BYTES,
+    ContextOverflowError,
+    ContextReport,
+    request_bytes,
+    truncate_bytes,
+)
 from errand_agent.llm.grounding import GroundingFacts, scan
 from errand_agent.llm.toolspec import ToolDef
 from errand_agent.llm.types import ChatModel, ChatRequest, Message, ModelOptions, ModelReply, ModelUnavailableError
@@ -42,7 +52,6 @@ from errand_agent.workflow.budget import (
 MAX_TOOL_ATTEMPTS = 4  # original + three retries (DECISIONS §4)
 MAX_PHRASE_ATTEMPTS = 2  # original + one grounding regeneration (G6)
 PER_CALL_TIMEOUT_S = 60.0
-DIAGNOSTIC_CHARS = 300
 CONTEXT_TRACE_CHARS = 20_000
 COST_NOTE = "unavailable: subscription-billed via ModelMux; no per-token billing basis"
 _FENCE = re.compile(r"```(?:json)?\s*(.*?)\s*```", re.S)
@@ -151,7 +160,14 @@ class ModelCaller:
         self._op_limits = operation_limits or OperationLimits()
 
     # ------------------------------------------------------------------ tool choice
-    def choose_tool(self, ctx: CallContext, messages: list[Message], tools: list[ToolDef]) -> ToolChoice:
+    def choose_tool(
+        self,
+        ctx: CallContext,
+        messages: list[Message],
+        tools: list[ToolDef],
+        *,
+        context: ContextReport | None = None,
+    ) -> ToolChoice:
         if not tools:
             raise ValueError("choose_tool needs at least one offered tool")
         offered = {t.name: t for t in tools}
@@ -160,7 +176,7 @@ class ModelCaller:
         convo = list(messages)
         last_problem = ""
         for attempt in range(1, MAX_TOOL_ATTEMPTS + 1):
-            reply, latency_ms = self._physical(ctx, convo, specs)
+            reply, latency_ms, size = self._physical(ctx, convo, specs)
             choice, problem = (
                 (None, "model unavailable or timed out") if reply is None else self._validate(reply, offered, attempt)
             )
@@ -174,6 +190,8 @@ class ModelCaller:
                 problem=problem,
                 accepted=choice.name if choice else None,
                 repaired=choice.repaired if choice else False,
+                size=size,
+                context=context,
             )
             if choice is not None:
                 return choice
@@ -206,7 +224,15 @@ class ModelCaller:
         return ToolChoice(name=call.name, args=parsed, attempts=attempt, repaired=repaired), None
 
     # ------------------------------------------------------------------ neutral phrasing
-    def phrase(self, ctx: CallContext, messages: list[Message], facts: GroundingFacts, fallback: str) -> PhraseResult:
+    def phrase(
+        self,
+        ctx: CallContext,
+        messages: list[Message],
+        facts: GroundingFacts,
+        fallback: str,
+        *,
+        context: ContextReport | None = None,
+    ) -> PhraseResult:
         try:
             self._reserve_logical(ctx)
         except BudgetExhaustedError:
@@ -215,8 +241,8 @@ class ModelCaller:
         violations: list[str] = []
         for attempt in range(1, MAX_PHRASE_ATTEMPTS + 1):
             try:
-                reply, latency_ms = self._physical(ctx, convo, [])
-            except BudgetExhaustedError:
+                reply, latency_ms, size = self._physical(ctx, convo, [])
+            except (BudgetExhaustedError, ContextOverflowError):
                 break
             text = reply.content.strip() if reply is not None and not reply.tool_calls else ""
             violations = ["empty or non-text reply"] if not text else scan(text, facts)
@@ -229,6 +255,8 @@ class ModelCaller:
                 latency_ms=latency_ms,
                 problem="; ".join(violations) or None,
                 accepted="text" if not violations else None,
+                size=size,
+                context=context,
             )
             if not violations:
                 return PhraseResult(text=text, source="model", attempts=attempt, violations=[])
@@ -249,7 +277,10 @@ class ModelCaller:
 
     def _physical(
         self, ctx: CallContext, messages: list[Message], specs: list[dict[str, Any]]
-    ) -> tuple[ModelReply | None, float]:
+    ) -> tuple[ModelReply | None, float, int]:
+        size = request_bytes(messages, specs)
+        if size > CAP_BYTES:  # checked before anything is reserved or sent
+            raise ContextOverflowError(f"{ctx.purpose} request is {size} bytes; cap {CAP_BYTES}")
         now = self._clock.now()
         remaining = (ctx.run.deadline_at - now).total_seconds()
         with self._db.session_txn(ctx.run.session_id) as conn:
@@ -273,13 +304,13 @@ class ModelCaller:
             elapsed_ms = int((self._clock.now() - started_clock).total_seconds() * 1000)
             with self._db.session_txn(ctx.run.session_id) as conn:
                 charge_operation_time(conn, ctx.operation_id, max(elapsed_ms, int(latency_ms)), self._op_limits)
-        return reply, latency_ms
+        return reply, latency_ms, size
 
     @staticmethod
     def _diagnostic(problem: str) -> str:
         return (
             "Your previous reply could not be used: "
-            + escape_data(problem[:DIAGNOSTIC_CHARS])
+            + truncate_bytes(escape_data(problem), DIAGNOSTIC_PROBLEM_BYTES)
             + ". Reply again following the instructions and using only the offered tools and values."
         )
 
@@ -294,6 +325,8 @@ class ModelCaller:
         latency_ms: float,
         problem: str | None,
         accepted: str | None,
+        size: int,
+        context: ContextReport | None,
         repaired: bool = False,
     ) -> None:
         payload = {
@@ -314,6 +347,11 @@ class ModelCaller:
             "latency_ms": latency_ms,
             "ignored_params": reply.ignored_params if reply else None,
             "cost": COST_NOTE,
+            "context": {
+                "request_bytes": size,
+                "cap_bytes": CAP_BYTES,
+                "plan": context.model_dump(mode="json") if context is not None else None,
+            },
         }
         with self._db.session_txn(ctx.run.session_id) as conn:
             trace.record(

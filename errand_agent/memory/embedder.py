@@ -88,3 +88,31 @@ def basis(*weights: tuple[int, float]) -> list[float]:
     for axis, w in weights:
         v[axis] = w
     return v
+
+
+class BudgetedEmbedder:
+    """Per-run wrapper: at most `limit` embedding requests per run (DECISIONS §2); repeated
+    query texts reuse the vector already computed in this run."""
+
+    def __init__(self, base: Embedder, *, limit: int = 4) -> None:
+        self._base = base
+        self._limit = limit
+        self.requests = 0
+        self._queries: dict[str, list[float]] = {}
+
+    @property
+    def model(self) -> str:
+        return self._base.model
+
+    def embed(self, texts: Sequence[str], *, kind: Kind) -> list[list[float]]:
+        if kind == "query" and all(t in self._queries for t in texts):
+            return [self._queries[t] for t in texts]
+        if self.requests >= self._limit:
+            raise EmbeddingUnavailableError(f"per-run embedding limit of {self._limit} requests reached")
+        self.requests += 1
+        vectors = [validate_vector(v) for v in self._base.embed(texts, kind=kind)]
+        if len(vectors) != len(texts):
+            raise EmbeddingUnavailableError(f"embedder returned {len(vectors)} vectors for {len(texts)} texts")
+        if kind == "query":
+            self._queries.update(zip(texts, vectors, strict=True))
+        return vectors

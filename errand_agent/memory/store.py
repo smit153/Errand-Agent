@@ -107,6 +107,10 @@ class MemoryStore:
         self._clock = clock
         self.embedder = embedder
 
+    def with_embedder(self, embedder: Embedder) -> MemoryStore:
+        """The same store using another embedder (e.g. the per-run budgeted wrapper)."""
+        return MemoryStore(self._db, self._clock, embedder)
+
     # ================================================================== explicit facts
     def remember(self, actor: Actor, value: Value, scope: Scope, *, statement: str) -> MemoryChange:
         """Store a preference the user stated. Same field+scope (not notes) is revised in place."""
@@ -186,6 +190,10 @@ class MemoryStore:
             if fact is not None:
                 made.append(fact)
         return made
+
+    def propose_inferred(self, user_id: str, value: Value, scope: Scope, evidence: dict[str, Any]) -> MemoryFact | None:
+        """An unconfirmed, code-inferred candidate (unused until the user confirms it)."""
+        return self._propose(user_id, value, scope, evidence)
 
     def _propose(self, user_id: str, value: Value, scope: Scope, evidence: dict[str, Any]) -> MemoryFact | None:
         check_scope(value, scope)

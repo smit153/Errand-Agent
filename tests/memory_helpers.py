@@ -97,3 +97,44 @@ def succeeded_booking(
             "UPDATE operations SET status = 'succeeded', outcome = %s WHERE id = %s",
             (Jsonb({"booking_id": f"BK-{slot:%m%d%H}"}), op),
         )
+
+
+_TOPICS: list[tuple[str, ...]] = [
+    ("plumb", "tap", "water", "leak", "flush", "sink", "washer", "geyser", "valve", "pressure", "pipe"),
+    ("electric", "wiring", "switch", "fan", "mcb", "inverter"),
+    ("ac ", "ac:", "cooling", "filter", "gas refill", "split", "drips"),
+    ("carpent", "wardrobe", "cabinet", "teak", "bookshelf", "hinge"),
+    ("clean", "sofa", "chimney", "glass"),
+    ("indiranagar", "koramangala", "area", "whitefield"),
+    ("time", "morning", " am", " pm"),
+    ("call", "dog", "parking", "upi", "payment"),
+]
+
+
+class TopicEmbedder:
+    """Deterministic 'semantic' vectors for offline evals: one axis per topic word list, plus a
+    small per-text hash component so different texts never tie exactly by accident."""
+
+    def __init__(self, model: str = "test-topic-768") -> None:
+        self._model = model
+        self._noise = HashEmbedder(model)
+        self.calls = 0
+        self.available = True
+
+    @property
+    def model(self) -> str:
+        return self._model
+
+    def embed(self, texts: Sequence[str], *, kind: Kind) -> list[list[float]]:
+        self.calls += 1
+        if not self.available:
+            raise EmbeddingUnavailableError("topic embedder switched off")
+        out = []
+        for text in texts:
+            low = f" {text.lower()} "
+            noise = self._noise.embed([text], kind="document")[0]
+            v = [0.08 * x for x in noise]
+            for axis, words in enumerate(_TOPICS):
+                v[axis] += sum(low.count(w) for w in words)
+            out.append(validate_vector(v))
+        return out

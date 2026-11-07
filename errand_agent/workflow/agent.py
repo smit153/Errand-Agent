@@ -39,12 +39,14 @@ from errand_agent.claims import ClaimManager, verify_claim
 from errand_agent.clock import Clock
 from errand_agent.db import Database, fetch_one
 from errand_agent.errors import BudgetExhaustedError, ErrandError, SessionBusyError, StaleClaimError
+from errand_agent.llm import context as ctxb
 from errand_agent.llm.caller import CallContext, ModelCaller, ModelFailureError, data_block
 from errand_agent.llm.grounding import GroundingFacts
 from errand_agent.llm.toolspec import ToolDef
 from errand_agent.llm.types import ChatModel, Message
+from errand_agent.memory.embedder import BudgetedEmbedder
 from errand_agent.memory.facts import AreaValue, EarliestTimeValue, MemoryFact, NoteValue, ProviderValue
-from errand_agent.memory.store import Actor, MemoryChange, MemoryStore
+from errand_agent.memory.store import Actor, MemoryChange, MemoryStore, Retrieval
 from errand_agent.tools.client import ToolClient
 from errand_agent.tools.context import ToolContext
 from errand_agent.tools.errors import ToolError
@@ -92,6 +94,12 @@ PHRASE_POLICY = (
     "Write one short, friendly question asking the user for the listed details. Do not state any prices, "
     "numbers, dates, times, providers, IDs or booking status."
 )
+EMBED_REQUESTS_PER_RUN = 4  # DECISIONS §2
+MEMORY_FIELDS_BY_INTENT: dict[str, tuple[Any, ...]] = {
+    "book": ("area", "earliest_time", "preferred_provider", "note"),
+    "reschedule": ("earliest_time", "note"),
+    "cancel": ("note",),
+}
 _FIELD_SET = re.compile(r"^\s*(area|date|time|budget)\s*[:=]\s*(.+?)\s*$", re.I)
 UNRESOLVED_STATES: frozenset[str] = frozenset({"executing", "verifying", "retry_wait", "pending_verification"})
 
@@ -116,12 +124,14 @@ class _Session(BaseModel):
 
 
 class _Turn:
-    """Mutable per-turn output collector."""
+    """Mutable per-turn state: replies, and this run's memory store (with its embedding budget)."""
 
-    def __init__(self) -> None:
+    def __init__(self, memory: MemoryStore | None = None) -> None:
         self.messages: list[str] = []
         self.receipt_id: UUID | None = None
         self.outcome: ExecutionOutcome | None = None
+        self.memory = memory
+        self.retrievals: dict[str, Retrieval] = {}
 
 
 class Agent:
@@ -138,6 +148,7 @@ class Agent:
     ) -> None:
         self._db = db
         self.memory = memory
+        self._turns: dict[UUID, _Turn] = {}  # run id → turn, for model calls that need run-scoped context
         self._clock = clock
         self._tools = tools
         self.holder = holder
@@ -155,7 +166,12 @@ class Agent:
         except SessionBusyError as exc:
             return AgentReply(messages=[exc.user_message], state=self._state(session_id))
         run = self.runs.start(claim)
-        turn = _Turn()
+        turn = _Turn(
+            self.memory.with_embedder(BudgetedEmbedder(self.memory.embedder, limit=EMBED_REQUESTS_PER_RUN))
+            if self.memory is not None
+            else None
+        )
+        self._turns[run.id] = turn
         exit_reason = "replied"
         self._trace(run, "agent.user_message", {"text": text, "receipt_id": str(receipt_id) if receipt_id else None})
         try:
@@ -182,6 +198,7 @@ class Agent:
             self._trace(run, "agent.error", {"type": type(exc).__name__, "detail": str(exc)})
             turn.messages.append(ErrandError.user_message)
         finally:
+            self._turns.pop(run.id, None)
             self.runs.end(run, exit_reason)
             self.claims.release(claim)
         reply = AgentReply(
@@ -400,14 +417,13 @@ class Agent:
         tool = at.update_request_tool(text, [o.option_no for o in sess.workspace.options])
         at.ensure_allowed(sess.state, [tool.name])
         facts = json.dumps(sess.request.model_dump(mode="json", exclude_none=True), sort_keys=True)
-        messages = [
-            Message(role="system", content=EXTRACT_POLICY),
-            Message(
-                role="user",
-                content=f"Facts the app already holds (JSON): {facts}\n\nThe user's latest message:\n{text}",
-            ),
-        ]
-        choice = self.caller.choose_tool(CallContext(run, "extract"), messages, [tool])
+        prompt = ctxb.build(
+            EXTRACT_POLICY,
+            [f"Facts the app already holds (JSON): {facts}", f"The user's latest message:\n{text}"],
+            [],
+            [tool.spec()],
+        )
+        choice = self.caller.choose_tool(CallContext(run, "extract"), prompt.messages, [tool], context=prompt.report)
         self._reserve_tool(run)  # internal action counts as a tool invocation
         args = choice.args.model_dump(exclude_none=True)
         if "option_number" in args:
@@ -415,13 +431,31 @@ class Agent:
         return Extraction.model_validate(args)
 
     def _act(
-        self, run: Run, tools: list[ToolDef], context: str, *, data: str | None = None, operation_id: UUID | None = None
+        self,
+        run: Run,
+        tools: list[ToolDef],
+        context: str,
+        *,
+        reviews: list[str] | None = None,
+        operation_id: UUID | None = None,
     ) -> BaseModel:
-        state = self._load(run).state
-        at.ensure_allowed(state, [t.name for t in tools])
-        content = context if data is None else f"{context}\n\n{data}"
-        messages = [Message(role="system", content=ACT_POLICY), Message(role="user", content=content)]
-        choice = self.caller.choose_tool(CallContext(run, "act", operation_id), messages, tools)
+        sess = self._load(run)
+        at.ensure_allowed(sess.state, [t.name for t in tools])
+        optional = [self._memory_section(run, sess.request)]
+        if reviews:
+            optional.append(
+                ctxb.OptionalSection(
+                    name="reviews",
+                    items=[(f"review-{i + 1}", r) for i, r in enumerate(reviews)],
+                    max_bytes=ctxb.REVIEW_SECTION_BYTES,
+                    render=lambda lines: data_block("provider reviews", "\n".join(lines)),
+                    item_max_chars=ctxb.REVIEW_EXCERPT_CHARS,
+                )
+            )
+        prompt = ctxb.build(ACT_POLICY, [context], optional, [t.spec() for t in tools])
+        choice = self.caller.choose_tool(
+            CallContext(run, "act", operation_id), prompt.messages, tools, context=prompt.report
+        )
         at.ensure_allowed(self._load(run).state, [choice.name])  # dispatch-side check of the same table
         return choice.args
 
@@ -464,12 +498,11 @@ class Agent:
         return [f"[{r.rating}/5] {r.text}" for r in details.reviews]
 
     def _select(self, run: Run, chosen: RankedOption, reviews: list[str]) -> None:
-        data = data_block("provider reviews", "\n".join(reviews)) if reviews else None
         self._act(
             run,
             [at.select_option_tool([chosen.option_no])],
             f"Select option {chosen.option_no} to prepare it for the user's approval.",
-            data=data,
+            reviews=reviews,
         )
         self._reserve_tool(run)
 
@@ -583,28 +616,28 @@ class Agent:
     # ================================================================== memory (PDF §3)
     def _memory_command(self, run: Run, turn: _Turn, sess: _Session, cmd: MemoryCommand) -> None:
         self._trace(run, "agent.memory_command", cmd.model_dump(mode="json"))
-        if self.memory is None:
+        if turn.memory is None:
             turn.messages.append(templates.MEMORY_OFF)
             return
         actor = Actor(user_id=sess.user_id, session_id=sess.id, run_id=run.id)
         if cmd.kind == "show":
-            turn.messages.append(templates.memory_view(self.memory.inspect(sess.user_id)))
+            turn.messages.append(templates.memory_view(turn.memory.inspect(sess.user_id)))
         elif cmd.kind == "forget" and cmd.number is not None:
-            change = self.memory.forget(actor, cmd.number)
+            change = turn.memory.forget(actor, cmd.number)
             turn.messages.append(
                 templates.memory_forgotten(cmd.number)
                 if change.outcome == "forgotten"
                 else templates.memory_not_found(cmd.number)
             )
         elif cmd.kind == "forget_field" and cmd.field is not None and cmd.scope is not None:
-            change = self.memory.forget_field(actor, cmd.field, cmd.scope)
+            change = turn.memory.forget_field(actor, cmd.field, cmd.scope)
             turn.messages.append(
                 templates.memory_forgotten(change.fact.display_no)
                 if change.outcome == "forgotten" and change.fact is not None
                 else templates.memory_not_found(None)
             )
         elif cmd.kind == "confirm" and cmd.number is not None:
-            change = self.memory.confirm(actor, cmd.number)
+            change = turn.memory.confirm(actor, cmd.number)
             turn.messages.append(self._change_message(cmd.number, change))
         elif cmd.kind == "correct" and cmd.number is not None and cmd.value is not None:
             self._correct_memory(run, turn, actor, cmd.number, cmd.value)
@@ -612,9 +645,9 @@ class Agent:
             raise ErrandError(f"incomplete memory command {cmd!r}")
 
     def _correct_memory(self, run: Run, turn: _Turn, actor: Actor, number: int, raw: str) -> None:
-        if self.memory is None:
+        if turn.memory is None:
             raise ErrandError("memory correction without a memory store")
-        fact = next((f for f in self.memory.inspect(actor.user_id) if f.display_no == number), None)
+        fact = next((f for f in turn.memory.inspect(actor.user_id) if f.display_no == number), None)
         if fact is None:
             turn.messages.append(templates.memory_not_found(number))
             return
@@ -630,7 +663,7 @@ class Agent:
         if value is None:
             turn.messages.append(templates.memory_value_unreadable(number, raw))
             return
-        change = self.memory.correct(actor, number, value, statement=raw)
+        change = turn.memory.correct(actor, number, value, statement=raw)
         turn.messages.append(self._change_message(number, change))
 
     def _provider_value(self, run: Run, raw: str, scope: str) -> ProviderValue | None:
@@ -666,7 +699,7 @@ class Agent:
         wanted = [f for f in ext.remember if f != "provider"]
         if not wanted and ext.remember_note is None:
             return
-        if self.memory is None:
+        if turn.memory is None:
             turn.messages.append(templates.MEMORY_OFF)
             return
         actor = Actor(user_id=sess.user_id, session_id=sess.id, run_id=run.id)
@@ -688,7 +721,7 @@ class Agent:
     def _remember_provider(self, run: Run, turn: _Turn, sess: _Session, ext: Extraction, text: str) -> None:
         if "provider" not in ext.remember:
             return
-        if self.memory is None:
+        if turn.memory is None:
             turn.messages.append(templates.MEMORY_OFF)
             return
         now = self._load(run)
@@ -710,28 +743,28 @@ class Agent:
         scope: Any,
         text: str,
     ) -> None:
-        if self.memory is None:
+        if turn.memory is None:
             raise ErrandError("memory save without a memory store")
-        change = self.memory.remember(actor, value, scope, statement=text)
+        change = turn.memory.remember(actor, value, scope, statement=text)
         if change.fact is None:
             raise ErrandError(f"memory save {change.outcome} returned no fact")
         turn.messages.append(templates.memory_saved(change.fact, change.outcome))
 
     def _with_saved_preferences(self, run: Run, turn: _Turn, req: RequestFacts) -> tuple[RequestFacts, str | None]:
         """Saved preferences as visible defaults for this turn only. Anything the user states wins."""
-        if self.memory is None or req.intent != "book":
+        if turn.memory is None or req.intent != "book":
             return req, None
         user = self._load(run).user_id
         used: list[MemoryFact] = []
         update: dict[str, Any] = {}
         if req.area is None and req.preferred_provider_id is None and not req.same_as_last_time:
-            fact = self.memory.current(user, "area", "global")
+            fact = turn.memory.current(user, "area", "global")
             if fact is not None and isinstance(fact.value, AreaValue):
                 update["area"] = fact.value.area
                 used.append(fact)
         if req.time is None:
-            fact = (self.memory.current(user, "earliest_time", req.service) if req.service else None) or (
-                self.memory.current(user, "earliest_time", "global")
+            fact = (turn.memory.current(user, "earliest_time", req.service) if req.service else None) or (
+                turn.memory.current(user, "earliest_time", "global")
             )
             if fact is not None and isinstance(fact.value, EarliestTimeValue):
                 clock = fact.value.earliest.strftime("%I:%M %p").lstrip("0")
@@ -739,7 +772,7 @@ class Agent:
                 used.append(fact)
         favoured: str | None = None
         if req.service is not None and req.preferred_provider_id is None:
-            fact = self.memory.current(user, "preferred_provider", req.service)
+            fact = turn.memory.current(user, "preferred_provider", req.service)
             if fact is not None and isinstance(fact.value, ProviderValue):
                 favoured = fact.value.provider_id
                 used.append(fact)
@@ -751,11 +784,54 @@ class Agent:
         return req.model_copy(update=update), favoured
 
     def _suggest_memories(self, run: Run, turn: _Turn, outcome: ExecutionOutcome) -> None:
-        if self.memory is None or outcome.status != "succeeded":
+        if turn.memory is None or outcome.status != "succeeded":
             return
-        made = self.memory.infer_from_bookings(self._load(run).user_id)
+        made = turn.memory.infer_from_bookings(self._load(run).user_id)
         if made:
             turn.messages.append(templates.memory_suggestions(made))
+
+    def _memory_section(self, run: Run, req: RequestFacts) -> ctxb.OptionalSection:
+        """Relevant, current saved preferences for the model (PDF §3), best-ranked first.
+
+        Retrieval is filtered in SQL (only active, confirmed, current-model, in-scope facts) and the
+        query is built from the structured request, never from chat text. Retrieved once per query
+        per run; the outcome, including an unavailable embedder, is traced.
+        """
+        turn = self._turns.get(run.id)
+        items: list[tuple[str, str]] = []
+        memory = turn.memory if turn is not None else None
+        if memory is not None and turn is not None:
+            query = _memory_query(req)
+            got = turn.retrievals.get(query)
+            if got is None:
+                got = memory.retrieve(
+                    self._load(run).user_id,
+                    query,
+                    service=req.service,
+                    fields=MEMORY_FIELDS_BY_INTENT[req.intent],
+                )
+                turn.retrievals[query] = got
+                self._trace(
+                    run,
+                    "memory.retrieved",
+                    {
+                        "query": got.query_text,
+                        "items": [{"display_no": r.fact.display_no, "score": r.score} for r in got.items],
+                        "unavailable": got.unavailable,
+                    },
+                )
+            items = [
+                (f"#{r.fact.display_no}", f"#{r.fact.display_no} {r.fact.text} ({r.fact.origin})") for r in got.items
+            ]
+        return ctxb.OptionalSection(
+            name="memories",
+            items=items,
+            max_bytes=ctxb.MEMORY_SECTION_BYTES,
+            render=lambda lines: (
+                "Saved preferences of this user (confirmed; what the user says now overrides them):\n"
+                + "\n".join(lines)
+            ),
+        )
 
     # ================================================================== degraded mode (G9)
     def _degrade(self, run: Run, turn: _Turn, text: str, detail: str) -> None:
@@ -920,3 +996,15 @@ def _summary(req: RequestFacts) -> dict[str, str]:
     if req.preferred_provider_name:
         out["provider"] = req.preferred_provider_name
     return out
+
+
+def _memory_query(req: RequestFacts) -> str:
+    """Retrieval query from validated request fields only (never raw chat or tool text)."""
+    parts = [req.intent, templates.service_label(req.service) if req.service else "home service"]
+    if req.area:
+        parts.append(f"in {req.area.replace('_', ' ').title()}")
+    if req.time:
+        parts.append(req.time.source)
+    if req.preferred_provider_name:
+        parts.append(f"with {req.preferred_provider_name}")
+    return " ".join(parts)
