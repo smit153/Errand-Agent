@@ -22,6 +22,12 @@
 - [x] 3c RecoveryService (take over expired claim → fence old generation → fresh run → resume unresolved ops). Crash points: after reserve / after backend commit / after dispatch (timeout booked and lost) → status checked before any re-dispatch, exactly one booking. Crash after cancel retry reached backend → same-key resume. Repeat confirmation + execution after restart replays the same effect. Restart before dispatch never executes without a valid proposal. Live claim blocks a second worker; delayed worker (stalled before call / before recording) is fenced and cannot duplicate or overwrite; three unrelated sessions book concurrently. Concurrency tests stable over 5 repeated runs.
 - Gate result (E05–E13, E23, E29, E32): **137 passed** (86 marked `invariant`); ruff, ruff format, mypy --strict clean.
 
+## Stage 4 — G1–G11 and scripted model (in progress, user approved 2026-11-07)
+- [x] 4a Deterministic parsing (G3): dates/times/budgets resolved against the injected clock in Asia/Kolkata; ambiguous ("next saturday"), past, invalid or unsupported → clarification; extracted spans must occur in the user text; service/area must be supported by user wording. Deterministic ranking (G4): budget/window/time/explicit-provider filters, then price ↑, rating ↓, provider ID, slot; exclusion counts for no-match; reschedule slots by closeness to the original time. Tests: 55 new, 195 total.
+- [ ] 4b Model layer: native-tool types, scripted model, Ollama adapter, state-scoped enum schemas (G1/G2), repair + 3 retries (G10), grounding scanner + phrasing (G6), per-operation model-call/active-time limits.
+- [ ] 4c Agent orchestrator, flows, G9 degraded menu, G11 isolation; scripted scenarios E01–E04, E16, E25–E30, E33–E40.
+- [ ] 4d Real Qwen 3.5 smoke (E42): ask the user before any large download.
+
 ## Pre-stage-4 requests (2026-11-07)
 - [x] Git identity fixed and AI attribution removed from history by the user; no attribution in future commits.
 - [x] Cross-check `docs/DESIGN_REVISION_v2.md` (saved from the user's paste) against DESIGN.md/DECISIONS.md: nothing from v2 is missing. Follow-ups recorded under Open items (job-queue dispatch, event ingestion, stale status lines, one-page check).

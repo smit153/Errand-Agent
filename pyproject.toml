@@ -34,6 +34,7 @@ ignore = [
     "TRY003",   # long messages in exceptions are deliberate (user-facing text)
     "PLR0913",  # explicit keyword-heavy signatures at boundaries
     "PLR2004",  # magic values are fine in tests/specs
+    "PLR0911",  # early-return decision tables (parsers, approval checks) read clearest
     "RUF001", "RUF002", "RUF003",  # ₹, en dashes and typographic quotes are intentional in user text
 ]
 

@@ -228,7 +228,7 @@ class ApprovalGate:
             )
         return result
 
-    def _confirm_locked(  # noqa: PLR0911 - an early-exit decision table reads clearest
+    def _confirm_locked(
         self,
         conn: Conn,
         *,

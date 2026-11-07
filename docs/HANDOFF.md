@@ -1,6 +1,10 @@
 # Handoff
 
-## Current checkpoint — stages 1–3 done and reviewed; pre-stage-4 requests handled (2026-11-07)
+## Current checkpoint — stage 4 in progress (2026-11-07)
+
+User said "continue to stage 4". Plan: 4a parsing/ranking (done: `errand_agent/workflow/{parsing,ranking}.py`), 4b model layer, 4c agent orchestrator + scripted scenarios, 4d real Qwen smoke (ask the user before downloading several GB). Then continue with stage 5 per the build plan unless the user says otherwise. Commits: no AI attribution lines.
+
+## Earlier checkpoint — stages 1–3 done and reviewed; pre-stage-4 requests handled (2026-11-07)
 
 User follow-ups after the stage-3 checkpoint:
 - Git identity is now `smit153` (set by the user) and history has no AI attribution. **Never add Co-Authored-By or "Generated with" lines to commits.**
