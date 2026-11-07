@@ -70,6 +70,9 @@ class Extraction(BaseModel):
     budget_expression: str | None = None
     provider_reference: Literal["same_as_last_time"] | None = None
     option_number: int | None = None
+    # Explicit memory (PDF §3): only accepted when the user's own message asks to remember.
+    remember: list[Literal["area", "time", "provider"]] = Field(default_factory=list)
+    remember_note: str | None = None
 
 
 def apply_extraction(

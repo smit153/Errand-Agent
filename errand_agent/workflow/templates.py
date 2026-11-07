@@ -303,7 +303,7 @@ STOPPED = "Okay, I've cleared this request. Nothing was booked or changed."
 BUSY_WITH_OPERATION = "I'm still finishing your earlier request, so I haven't started anything new yet."
 
 
-def options_heading(req: object) -> str:
+def options_heading(req: object, *, favoured: str | None = None) -> str:
     """Heading for the comparison: the constraints code applied, rendered from validated facts."""
     parts: list[str] = []
     date = getattr(req, "date", None)
@@ -320,7 +320,8 @@ def options_heading(req: object) -> str:
         parts.append(f"with {provider}")
     service = getattr(req, "service", None)
     label = service_label(service) if service else "provider"
-    return f"Best {label} options ({'; '.join(parts)}), cheapest first:"
+    order = f"your saved provider {favoured} first, then cheapest" if favoured else "cheapest first"
+    return f"Best {label} options ({'; '.join(parts)}), {order}:"
 
 
 def quote_differs(search_price: int, quote: int) -> str:
@@ -350,3 +351,99 @@ KEEP_CARD = (
     "I've kept the details above. Reply 'yes' or the confirmation code to approve them, or tell me what to change."
 )
 CARD_INVALIDATED = "Got it — I've updated the request, so the earlier approval card no longer applies."
+
+
+# ------------------------------------------------------------------ memory (PDF §3 persistent memory)
+class FactLike(Protocol):
+    @property
+    def display_no(self) -> int: ...
+    @property
+    def text(self) -> str: ...
+    @property
+    def origin(self) -> str: ...
+    @property
+    def status(self) -> str: ...
+
+
+ANYTHING_ELSE = "Anything you'd like me to arrange?"
+MEMORY_HELP = "Say 'forget memory N' or 'correct memory N: <new value>' to change one."
+MEMORY_OFF = "Saved preferences aren't set up in this run of the app, so nothing was saved or changed."
+
+
+def memory_view(facts: Sequence[FactLike]) -> str:
+    if not facts:
+        return "I don't have any saved preferences for you."
+    sections = [
+        ("Preferences you told me:", [f for f in facts if f.origin == "explicit" and f.status == "active"]),
+        (
+            "Learned from your bookings, confirmed by you:",
+            [f for f in facts if f.origin == "inferred" and f.status == "active"],
+        ),
+        (
+            "Suggestions from your bookings (not used until you say 'confirm memory N'):",
+            [f for f in facts if f.status == "unconfirmed"],
+        ),
+        ("Not finished saving yet (not used until saved):", [f for f in facts if f.status == "pending_embedding"]),
+    ]
+    lines: list[str] = []
+    for title, items in sections:
+        if items:
+            lines.append(title)
+            lines.extend(f"  #{f.display_no} {f.text}" for f in items)
+    lines.append(MEMORY_HELP)
+    return "\n".join(lines)
+
+
+def memory_saved(fact: FactLike, outcome: str) -> str:
+    if outcome == "unchanged":
+        return f"I already have that saved as #{fact.display_no}: {fact.text}."
+    if outcome == "pending_embedding":
+        return (
+            f"I noted #{fact.display_no}: {fact.text}, but couldn't finish saving it, "
+            "so I won't use it until it's saved."
+        )
+    return f"Saved to memory as #{fact.display_no}: {fact.text}."
+
+
+def memory_forgotten(number: int) -> str:
+    return f"Forgotten #{number}. I won't use it again."
+
+
+def memory_not_found(number: int | None) -> str:
+    return "I don't have that saved." if number is None else f"There's no saved memory #{number}."
+
+
+def memory_not_suggestion(number: int) -> str:
+    return f"#{number} isn't a suggestion waiting for confirmation, so nothing changed."
+
+
+def memory_wrong_kind(number: int) -> str:
+    return f"#{number} can't take that kind of value, so nothing changed. {MEMORY_HELP}"
+
+
+def memory_value_unreadable(number: int, value: str) -> str:
+    return f"I couldn't read '{value}' as a new value for #{number}, so nothing changed."
+
+
+def memory_suggestions(facts: Sequence[FactLike]) -> str:
+    items = "; ".join(f"#{f.display_no} {f.text}" for f in facts)
+    return (
+        f"From your recent bookings I could remember: {items}. Say 'confirm memory N' to keep one; "
+        "I won't use it until you do."
+    )
+
+
+def memory_defaults(facts: Sequence[FactLike]) -> str:
+    items = "; ".join(f"#{f.display_no} {f.text}" for f in facts)
+    return f"Using your saved preferences: {items}. Tell me a different one to override it for this request."
+
+
+def remember_unavailable(what: str) -> str:
+    return f"I couldn't save {what} to memory: {_REMEMBER_REASONS.get(what, 'it is not known yet')}."
+
+
+_REMEMBER_REASONS = {
+    "area": "no area is set for this request yet",
+    "earliest time": "this request has no earliest time (for example 'not before 10 a.m.')",
+    "provider": "no provider is chosen for this request yet",
+}

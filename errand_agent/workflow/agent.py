@@ -14,6 +14,12 @@ Consequential tools are offered only for an approved operation, and the executor
 the proposal against the approved snapshot (G7). Reviews reach the model only as escaped data
 blocks and never reach extraction (G11). If the model keeps failing, a numbered menu keeps every
 exit clear without bypassing approval (G9).
+
+Memory (PDF §3): memory commands (show / forget / confirm / correct) are handled by code, like
+confirmations. "Remember …" goes through extraction and is accepted only when the user's own
+words ask for it. Saved preferences become visible, overridable defaults recomputed every turn
+(never cached in the request), so a correction or forget applies from the next turn. After a
+verified booking, code may suggest inferred preferences, which stay unused until confirmed.
 """
 
 from __future__ import annotations
@@ -37,6 +43,8 @@ from errand_agent.llm.caller import CallContext, ModelCaller, ModelFailureError,
 from errand_agent.llm.grounding import GroundingFacts
 from errand_agent.llm.toolspec import ToolDef
 from errand_agent.llm.types import ChatModel, Message
+from errand_agent.memory.facts import AreaValue, EarliestTimeValue, MemoryFact, NoteValue, ProviderValue
+from errand_agent.memory.store import Actor, MemoryChange, MemoryStore
 from errand_agent.tools.client import ToolClient
 from errand_agent.tools.context import ToolContext
 from errand_agent.tools.errors import ToolError
@@ -46,9 +54,18 @@ from errand_agent.workflow import templates
 from errand_agent.workflow.approval import ApprovalGate, parse_confirmation
 from errand_agent.workflow.budget import Run, RunLimits, RunManager, reserve_run
 from errand_agent.workflow.executor import ExecutionOutcome, OperationExecutor, ProposedCall
+from errand_agent.workflow.memory_commands import (
+    PROVIDER_ID,
+    MemoryCommand,
+    parse_area,
+    parse_earliest,
+    parse_memory_command,
+    parse_note,
+)
 from errand_agent.workflow.parsing import (
     Clarification,
     DateWindow,
+    TimeWindow,
     area_supported_by,
     resolve_budget,
     resolve_date,
@@ -117,8 +134,10 @@ class Agent:
         *,
         holder: str = "agent",
         run_limits: RunLimits | None = None,
+        memory: MemoryStore | None = None,
     ) -> None:
         self._db = db
+        self.memory = memory
         self._clock = clock
         self._tools = tools
         self.holder = holder
@@ -174,6 +193,10 @@ class Agent:
     # ================================================================== turn dispatch
     def _turn(self, run: Run, turn: _Turn, user_id: str, text: str, receipt_id: UUID | None) -> None:
         sess = self._load(run)
+        command = parse_memory_command(text)
+        if command is not None:
+            self._memory_command(run, turn, sess, command)
+            return
         if sess.workspace.menu is not None:
             pick = _menu_pick(text, sess.workspace.menu)
             if pick is not None:
@@ -191,10 +214,11 @@ class Agent:
             return
         sess = self._start_errand_if_done(run, sess)
         ext = self._extract(run, sess, text)
-        self._apply_and_plan(run, turn, sess, ext)
+        self._apply_and_plan(run, turn, sess, ext, text)
 
-    def _apply_and_plan(self, run: Run, turn: _Turn, sess: _Session, ext: Extraction) -> None:
+    def _apply_and_plan(self, run: Run, turn: _Turn, sess: _Session, ext: Extraction, text: str = "") -> None:
         req, clarifications, changed = apply_extraction(sess.request, ext, self._clock.now())
+        self._remember_stated(run, turn, sess, req=req, ext=ext, text=text)
         ws = sess.workspace
         if ext.option_number is not None and any(o.option_no == ext.option_number for o in ws.options):
             if ext.option_number != ws.selected_option:
@@ -204,6 +228,7 @@ class Agent:
             ws = Workspace(seen_provider_names=ws.seen_provider_names)
         if sess.state == "awaiting_approval":
             if not changed and not clarifications:
+                self._remember_provider(run, turn, sess, ext, text)
                 turn.messages.append(templates.KEEP_CARD)
                 return
             self.gate.invalidate_pending(sess.id, f"user changed {', '.join(sorted(changed)) or 'details'}")
@@ -218,7 +243,20 @@ class Agent:
                 "clarifications": [c.reason for c in clarifications],
             },
         )
+        if (
+            (ext.remember or ext.remember_note)
+            and req.intent == "book"
+            and req.service is None
+            and not changed
+            - {
+                "area",
+                "time",
+            }
+        ):
+            turn.messages.append(templates.ANYTHING_ELSE)  # only a "remember …" message: nothing to plan yet
+            return
         self._plan(run, turn, clarifications)
+        self._remember_provider(run, turn, sess, ext, text)
 
     # ================================================================== planning
     def _plan(self, run: Run, turn: _Turn, clarifications: list[Clarification]) -> None:
@@ -238,6 +276,7 @@ class Agent:
             if not self._resolve_previous_provider(run, turn, sess):
                 return
             req = self._load(run).request
+        req, favoured = self._with_saved_preferences(run, turn, req)
         missing = missing_fields(req)
         asked = list(dict.fromkeys([*missing, *(c.field for c in clarifications)]))
         if asked:
@@ -252,6 +291,7 @@ class Agent:
             times=req.time,
             budget=req.budget,
             preferred_provider_id=req.preferred_provider_id,
+            favoured_provider_id=favoured,
         )
         if not ranking.options:
             turn.messages.append(
@@ -271,7 +311,11 @@ class Agent:
         )
         self._save(run, workspace=ws)
         self._move(run, "comparing", "options ranked")
-        turn.messages.append(templates.comparison(ranking.options, templates.options_heading(req)))
+        first = ranking.options[0]
+        favoured_name = first.provider_name if favoured is not None and first.provider_id == favoured else None
+        turn.messages.append(
+            templates.comparison(ranking.options, templates.options_heading(req, favoured=favoured_name))
+        )
         chosen = next(o for o in ranking.options if o.option_no == selected)
         reviews = self._provider_details(run, chosen)
         self._select(run, chosen, reviews)
@@ -516,6 +560,7 @@ class Agent:
             outcome = self.executor.execute(run, operation_id, proposal)
         turn.outcome = outcome
         turn.messages.append(outcome.message)
+        self._suggest_memories(run, turn, outcome)
 
     def _report_unresolved(self, run: Run, turn: _Turn, sess: _Session) -> None:
         with self._db.txn() as conn:
@@ -531,8 +576,186 @@ class Agent:
         outcome = self.executor.resume(run, row["id"])  # deterministic reconcile/retry within budgets
         turn.outcome = outcome
         turn.messages.append(outcome.message)
+        self._suggest_memories(run, turn, outcome)
         if outcome.status not in ("succeeded", "failed"):
             turn.messages.append(templates.BUSY_WITH_OPERATION)
+
+    # ================================================================== memory (PDF §3)
+    def _memory_command(self, run: Run, turn: _Turn, sess: _Session, cmd: MemoryCommand) -> None:
+        self._trace(run, "agent.memory_command", cmd.model_dump(mode="json"))
+        if self.memory is None:
+            turn.messages.append(templates.MEMORY_OFF)
+            return
+        actor = Actor(user_id=sess.user_id, session_id=sess.id, run_id=run.id)
+        if cmd.kind == "show":
+            turn.messages.append(templates.memory_view(self.memory.inspect(sess.user_id)))
+        elif cmd.kind == "forget" and cmd.number is not None:
+            change = self.memory.forget(actor, cmd.number)
+            turn.messages.append(
+                templates.memory_forgotten(cmd.number)
+                if change.outcome == "forgotten"
+                else templates.memory_not_found(cmd.number)
+            )
+        elif cmd.kind == "forget_field" and cmd.field is not None and cmd.scope is not None:
+            change = self.memory.forget_field(actor, cmd.field, cmd.scope)
+            turn.messages.append(
+                templates.memory_forgotten(change.fact.display_no)
+                if change.outcome == "forgotten" and change.fact is not None
+                else templates.memory_not_found(None)
+            )
+        elif cmd.kind == "confirm" and cmd.number is not None:
+            change = self.memory.confirm(actor, cmd.number)
+            turn.messages.append(self._change_message(cmd.number, change))
+        elif cmd.kind == "correct" and cmd.number is not None and cmd.value is not None:
+            self._correct_memory(run, turn, actor, cmd.number, cmd.value)
+        else:
+            raise ErrandError(f"incomplete memory command {cmd!r}")
+
+    def _correct_memory(self, run: Run, turn: _Turn, actor: Actor, number: int, raw: str) -> None:
+        if self.memory is None:
+            raise ErrandError("memory correction without a memory store")
+        fact = next((f for f in self.memory.inspect(actor.user_id) if f.display_no == number), None)
+        if fact is None:
+            turn.messages.append(templates.memory_not_found(number))
+            return
+        value: AreaValue | EarliestTimeValue | ProviderValue | NoteValue | None
+        if fact.field == "area":
+            value = parse_area(raw)
+        elif fact.field == "earliest_time":
+            value = parse_earliest(raw, self._clock.now())
+        elif fact.field == "note":
+            value = parse_note(raw)
+        else:
+            value = self._provider_value(run, raw, fact.scope)
+        if value is None:
+            turn.messages.append(templates.memory_value_unreadable(number, raw))
+            return
+        change = self.memory.correct(actor, number, value, statement=raw)
+        turn.messages.append(self._change_message(number, change))
+
+    def _provider_value(self, run: Run, raw: str, scope: str) -> ProviderValue | None:
+        """A provider correction names a real provider ID of the same service (checked with get_provider)."""
+        m = PROVIDER_ID.search(raw)
+        if m is None:
+            return None
+        self._reserve_tool(run)
+        try:
+            details = self._tools.get_provider(self._ctx(run), {"provider_id": m.group(1).upper()})
+        except ToolError:
+            return None
+        if details.service != scope:
+            return None
+        return ProviderValue(provider_id=details.provider_id, provider_name=details.name)
+
+    @staticmethod
+    def _change_message(number: int, change: MemoryChange) -> str:
+        if change.outcome == "not_found":
+            return templates.memory_not_found(number)
+        if change.outcome == "not_allowed":
+            if change.fact is not None and change.fact.status != "unconfirmed":
+                return templates.memory_not_suggestion(number)
+            return templates.memory_wrong_kind(number)
+        if change.fact is None:
+            raise ErrandError(f"memory change {change.outcome} returned no fact")
+        return templates.memory_saved(change.fact, change.outcome)
+
+    def _remember_stated(
+        self, run: Run, turn: _Turn, sess: _Session, *, req: RequestFacts, ext: Extraction, text: str
+    ) -> None:
+        """Save what the user explicitly asked to remember, using code-resolved request values."""
+        wanted = [f for f in ext.remember if f != "provider"]
+        if not wanted and ext.remember_note is None:
+            return
+        if self.memory is None:
+            turn.messages.append(templates.MEMORY_OFF)
+            return
+        actor = Actor(user_id=sess.user_id, session_id=sess.id, run_id=run.id)
+        for field in wanted:
+            if field == "area":
+                if req.area is None:
+                    turn.messages.append(templates.remember_unavailable("area"))
+                    continue
+                self._save_memory(turn, actor, AreaValue(area=req.area), "global", text)
+            elif req.time is None or req.time.earliest is None:
+                turn.messages.append(templates.remember_unavailable("earliest time"))
+            else:
+                self._save_memory(turn, actor, EarliestTimeValue(earliest=req.time.earliest), "global", text)
+        if ext.remember_note is not None:
+            note = parse_note(ext.remember_note)
+            if note is not None:
+                self._save_memory(turn, actor, note, req.service or "global", text)
+
+    def _remember_provider(self, run: Run, turn: _Turn, sess: _Session, ext: Extraction, text: str) -> None:
+        if "provider" not in ext.remember:
+            return
+        if self.memory is None:
+            turn.messages.append(templates.MEMORY_OFF)
+            return
+        now = self._load(run)
+        req, ws = now.request, now.workspace
+        chosen = next((o for o in ws.options if o.option_no == ws.selected_option), None)
+        provider_id = req.preferred_provider_id or (chosen.provider_id if chosen else None)
+        name = req.preferred_provider_name or (chosen.provider_name if chosen else None)
+        if req.service is None or provider_id is None or name is None:
+            turn.messages.append(templates.remember_unavailable("provider"))
+            return
+        actor = Actor(user_id=sess.user_id, session_id=sess.id, run_id=run.id)
+        self._save_memory(turn, actor, ProviderValue(provider_id=provider_id, provider_name=name), req.service, text)
+
+    def _save_memory(
+        self,
+        turn: _Turn,
+        actor: Actor,
+        value: AreaValue | EarliestTimeValue | ProviderValue | NoteValue,
+        scope: Any,
+        text: str,
+    ) -> None:
+        if self.memory is None:
+            raise ErrandError("memory save without a memory store")
+        change = self.memory.remember(actor, value, scope, statement=text)
+        if change.fact is None:
+            raise ErrandError(f"memory save {change.outcome} returned no fact")
+        turn.messages.append(templates.memory_saved(change.fact, change.outcome))
+
+    def _with_saved_preferences(self, run: Run, turn: _Turn, req: RequestFacts) -> tuple[RequestFacts, str | None]:
+        """Saved preferences as visible defaults for this turn only. Anything the user states wins."""
+        if self.memory is None or req.intent != "book":
+            return req, None
+        user = self._load(run).user_id
+        used: list[MemoryFact] = []
+        update: dict[str, Any] = {}
+        if req.area is None and req.preferred_provider_id is None and not req.same_as_last_time:
+            fact = self.memory.current(user, "area", "global")
+            if fact is not None and isinstance(fact.value, AreaValue):
+                update["area"] = fact.value.area
+                used.append(fact)
+        if req.time is None:
+            fact = (self.memory.current(user, "earliest_time", req.service) if req.service else None) or (
+                self.memory.current(user, "earliest_time", "global")
+            )
+            if fact is not None and isinstance(fact.value, EarliestTimeValue):
+                clock = fact.value.earliest.strftime("%I:%M %p").lstrip("0")
+                update["time"] = TimeWindow(earliest=fact.value.earliest, source=f"not before {clock} (saved)")
+                used.append(fact)
+        favoured: str | None = None
+        if req.service is not None and req.preferred_provider_id is None:
+            fact = self.memory.current(user, "preferred_provider", req.service)
+            if fact is not None and isinstance(fact.value, ProviderValue):
+                favoured = fact.value.provider_id
+                used.append(fact)
+        if used:
+            turn.messages.append(templates.memory_defaults(used))
+            self._trace(
+                run, "memory.defaults_applied", {"facts": [{"display_no": f.display_no, "text": f.text} for f in used]}
+            )
+        return req.model_copy(update=update), favoured
+
+    def _suggest_memories(self, run: Run, turn: _Turn, outcome: ExecutionOutcome) -> None:
+        if self.memory is None or outcome.status != "succeeded":
+            return
+        made = self.memory.infer_from_bookings(self._load(run).user_id)
+        if made:
+            turn.messages.append(templates.memory_suggestions(made))
 
     # ================================================================== degraded mode (G9)
     def _degrade(self, run: Run, turn: _Turn, text: str, detail: str) -> None:

@@ -1,7 +1,8 @@
 """Deterministic filtering and ranking of provider options (guardrail G4).
 
 Hard constraints first (budget, date window, time window, an explicitly chosen provider), then a
-stable order: price ascending, rating descending, provider ID, slot. The model may explain the
+stable order: a saved preferred provider first (only if it passed every filter), then price
+ascending, rating descending, provider ID, slot. The model may explain the
 order but can never change eligibility or ordering. Exclusion counts let code explain a no-match.
 """
 
@@ -51,8 +52,11 @@ def rank(
     times: TimeWindow | None,
     budget: Budget | None,
     preferred_provider_id: str | None = None,
+    favoured_provider_id: str | None = None,
     limit: int = MAX_OPTIONS,
 ) -> Ranking:
+    """`preferred_provider_id` restricts to one provider (the user asked for them);
+    `favoured_provider_id` (a saved preference) only moves that provider first if it passes every filter."""
     over_budget = no_slot = not_preferred = 0
     picks: list[tuple[int, float, str, datetime, ProviderSummary]] = []
     for p in providers:
@@ -67,7 +71,7 @@ def rank(
             no_slot += 1
             continue
         picks.append((p.price_inr, -p.rating, p.provider_id, slots[0], p))
-    picks.sort(key=lambda t: (t[0], t[1], t[2], t[3]))
+    picks.sort(key=lambda t: (t[2] != favoured_provider_id, t[0], t[1], t[2], t[3]))
     options = [
         RankedOption(
             option_no=i + 1,

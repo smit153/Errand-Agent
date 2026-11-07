@@ -17,6 +17,7 @@ from errand_agent.clock import FakeClock
 from errand_agent.db import Database
 from errand_agent.llm.scripted import ScriptedModel, call, text
 from errand_agent.llm.types import ChatRequest, ModelReply
+from errand_agent.memory.store import MemoryStore
 from errand_agent.mocks.backend import HOLD_TTL, MockBackend, ScenarioConfig
 from errand_agent.mocks.catalog import DEMO_USER, INJECTION_REVIEW
 from errand_agent.tools.client import ToolClient
@@ -24,7 +25,9 @@ from errand_agent.tools.context import ToolContext
 from errand_agent.workflow.agent import Agent, AgentReply
 from errand_agent.workflow.agent_tools import STATE_TOOLS, ToolNotAllowedError, ensure_allowed
 from errand_agent.workflow.states import STATES
+from tests.conftest import make_session
 from tests.helpers import count
+from tests.memory_helpers import HashEmbedder
 
 PLUMBER = "Find a plumber for my kitchen tap this week, mornings only, under ₹1,500."
 AC_MOVE = "Move my AC servicing to Saturday."
@@ -64,11 +67,19 @@ SEARCH_TO_CARD = [comply("search_providers"), comply("get_provider"), comply("se
 
 
 class Chat:
-    def __init__(self, db: Database, clock: FakeClock, tools: ToolClient, ctx: ToolContext) -> None:
-        self.db, self.ctx = db, ctx
+    def __init__(
+        self, db: Database, clock: FakeClock, tools: ToolClient, ctx: ToolContext, memory: MemoryStore | None = None
+    ) -> None:
+        self.db, self.ctx, self.clock, self.tools = db, ctx, clock, tools
+        self.memory = memory if memory is not None else MemoryStore(db, clock, HashEmbedder())
         self.model = ScriptedModel()
-        self.agent = Agent(db, clock, tools, self.model)
+        self.agent = Agent(db, clock, tools, self.model, memory=self.memory)
         self.receipt: Any = None
+
+    def new_session(self) -> Chat:
+        """Same user, same memory, a fresh conversation (a later visit)."""
+        ctx = ToolContext(user_id=DEMO_USER, session_id=make_session(self.db, DEMO_USER, self.clock.now()))
+        return Chat(self.db, self.clock, self.tools, ctx, self.memory)
 
     def say(self, message: str, *steps: Any) -> AgentReply:
         self.model.extend(list(steps))

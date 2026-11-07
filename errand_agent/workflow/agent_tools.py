@@ -15,6 +15,7 @@ from pydantic import BaseModel
 from errand_agent.errors import ErrandError
 from errand_agent.llm.toolspec import ToolDef, args_model, enum_of
 from errand_agent.tools.models import AREAS, SERVICES
+from errand_agent.workflow.memory_commands import MEMORY_CUE
 from errand_agent.workflow.parsing import area_supported_by, occurs_in, service_supported_by
 from errand_agent.workflow.states import SessionState
 
@@ -54,6 +55,8 @@ def update_request_tool(user_text: str, option_numbers: list[int]) -> ToolDef:
         "time_expression": (str | None, None),
         "budget_expression": (str | None, None),
         "provider_reference": (enum_of(["same_as_last_time"]) | None, None),
+        "remember": (list.__class_getitem__(enum_of(["area", "time", "provider"])) | None, None),
+        "remember_note": (str | None, None),
     }
     if option_numbers:
         fields["option_number"] = (enum_of([str(n) for n in option_numbers]) | None, None)
@@ -68,11 +71,17 @@ def update_request_tool(user_text: str, option_numbers: list[int]) -> ToolDef:
             return "service is not stated in the user's message"
         if data.get("area") and not area_supported_by(data["area"], user_text):
             return "area is not stated in the user's message"
+        if (data.get("remember") or data.get("remember_note")) and not MEMORY_CUE.search(user_text):
+            return "remember and remember_note are only for messages where the user explicitly asks you to remember"
+        note = data.get("remember_note")
+        if note is not None and not occurs_in(note, user_text):
+            return "remember_note must be copied verbatim from the user's message"
         return None
 
     return ToolDef(
         "update_request",
-        "Record what the user's latest message states. Copy expressions verbatim; leave unstated fields null.",
+        "Record what the user's latest message states. Copy expressions verbatim; leave unstated fields null. "
+        "Use remember / remember_note only when the user explicitly asks you to remember something.",
         args_model("UpdateRequestArgs", **fields),
         grounded,
     )

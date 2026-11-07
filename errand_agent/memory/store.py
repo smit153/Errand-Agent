@@ -144,7 +144,8 @@ class MemoryStore:
             rows = fetch_all(
                 conn,
                 "SELECT id, snapshot FROM operations WHERE user_id = %s AND action = 'book' AND status = 'succeeded'"
-                " AND coalesce((snapshot->>'suggested')::boolean, false) = false ORDER BY created_at, id",
+                " AND coalesce((snapshot->>'suggested')::boolean, false) = false"
+                " ORDER BY (snapshot->>'slot')::timestamptz, id",
                 (user_id,),
             )
         bookings: list[tuple[UUID, _BookingRow]] = []

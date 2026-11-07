@@ -230,3 +230,17 @@ def test_reschedule_slots_prefer_the_original_time_of_day() -> None:
     original = ist(2026, 11, 8, 14).astimezone(UTC)
     options = rank_reschedule_slots(p, window=saturday, original=original)
     assert [o.slot.astimezone(LOCAL_TZ).hour for o in options] == [13, 16, 9]
+
+
+@pytest.mark.invariant
+def test_saved_provider_moves_first_only_when_it_passes_every_filter() -> None:
+    cheap = provider("PLU-IND-01", 500, 4.0, 10)
+    pricier = provider("PLU-IND-02", 900, 4.5, 11)
+    over_budget = provider("PLU-IND-03", 2000, 5.0, 10)
+    favoured = rank([cheap, pricier], window=WEEK, times=MORNINGS, budget=BUDGET, favoured_provider_id="PLU-IND-02")
+    assert [o.provider_id for o in favoured.options] == ["PLU-IND-02", "PLU-IND-01"]
+    assert [o.option_no for o in favoured.options] == [1, 2]
+    # A saved preference never overrides a hard filter: the over-budget provider stays excluded.
+    filtered = rank([cheap, over_budget], window=WEEK, times=MORNINGS, budget=BUDGET, favoured_provider_id="PLU-IND-03")
+    assert [o.provider_id for o in filtered.options] == ["PLU-IND-01"]
+    assert filtered.excluded_over_budget == 1
