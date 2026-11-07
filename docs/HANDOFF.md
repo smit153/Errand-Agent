@@ -8,7 +8,7 @@ Read first: PROGRESS.md, docs/DESIGN.md, docs/DECISIONS.md §§1–16 (§15 buil
 
 Done: stage 1 (see PROGRESS.md). Code layout: `errand_agent/{config,clock,errors,trace,claims}.py`, `errand_agent/db/` (Database, session_txn, migrate, migrations/0001_init.sql), `tests/` (conftest recreates `errand_test` once per session and truncates per test).
 
-Done: stage 2a — `errand_agent/tools/{models,errors,context,client}.py`, `errand_agent/mocks/{catalog,backend}.py` (read-only tools). Done: 2b (hold/book/status, RNG, replay, fencing; `tests/helpers.py` builds operation/attempt rows directly for backend tests). Done: 2c (cancel 503 phase, reschedule conflict). Stage 2 complete. In progress: stage 3a.
+Done: stage 2a — `errand_agent/tools/{models,errors,context,client}.py`, `errand_agent/mocks/{catalog,backend}.py` (read-only tools). Done: 2b (hold/book/status, RNG, replay, fencing; `tests/helpers.py` builds operation/attempt rows directly for backend tests). Done: 2c (cancel 503 phase, reschedule conflict). Stage 2 complete. Done: 3a — `errand_agent/workflow/{states,snapshots,templates,approval}.py`. In progress: 3b executor.
 
 Key implementation decisions (within the design):
 - Consequential mock calls carry an internal `Fence` (holder, generation, operation_id, attempt_id) in `ToolContext`, never as tool arguments; backend re-verifies claim + reserved attempt + snapshot under the session advisory lock in the same transaction as the effect.
@@ -17,7 +17,7 @@ Key implementation decisions (within the design):
 
 How to run: `docker compose up -d --wait postgres` then `scripts/dev.sh scripts/check.sh`. From this agent's sandbox, wrap with `wsl.exe --distribution Ubuntu --user laptop --cd <repo> --exec bash -c '...'` (fresh WSL process has docker group). Re-lock deps: `scripts/dev.sh scripts/lock.sh` then `python3 -I scripts/verify_lock_hashes.py requirements.lock requirements-dev.lock` (must report 0 failures before installing).
 
-Next 3 steps: 3a (approval gate), 3b (executor), 3c (recovery/crash/races). Then STOP and show the user test results.
+Next steps: 3b (executor), 3c (recovery/crash/races). Then STOP and show the user test results.
 
 <details>
 <summary>Design-phase handoff history (superseded)</summary>

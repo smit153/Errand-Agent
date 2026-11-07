@@ -17,7 +17,7 @@
 - [x] 2c cancel (first call per key → durable transient 503 with no effect, same-key retry succeeds, configurable extra faults, provider-cancelled state reported as observed), reschedule (configured/unavailable/off-schedule/past → slot_conflict preserving the original; replay), `simulate_provider_cancellation` control. Tests: 68 passed. Gate E41 + backend parts of E08–E15 covered.
 
 ## Stage 3 — approval + journal + booking recovery (in progress)
-- [ ] 3a State machine, immutable proposal revisions, display receipts, both confirmation forms, atomic approval→operation.
+- [x] 3a Explicit state machine (validated, CAS-versioned, traced transitions); immutable snapshot revisions (one pending per session, identical re-propose is idempotent, blocked while an operation is unresolved); display receipts issued only when code renders the card; `yes` / `confirm <token>` bound to the receipt's still-pending revision; stale/superseded → specific material-change explanation, never transferred; expired hold → template; atomic approval + operation + stable key; duplicates return the same operation (also after restart and under 5-way concurrency). Tests: 35 new, 103 total.
 - [ ] 3b Executor: stable keys, attempt reservations, run/lifetime budgets, exact-snapshot dispatch (G7).
 - [ ] 3c Forced timeout reconciliation, repeated-confirmation replay, crash points/recovery, two-worker races.
 
