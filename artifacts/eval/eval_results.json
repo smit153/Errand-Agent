@@ -1,7 +1,7 @@
 {
   "meta": {
-    "generated_at": "2026-11-07T21:35:21+00:00",
-    "commit": "15e333b+dirty",
+    "generated_at": "2026-11-07T21:36:44+00:00",
+    "commit": "bfe2ddb",
     "scenarios_run": 37,
     "scenarios_marked": 37,
     "passed": 37,
@@ -14,7 +14,7 @@
       "expected": "Only the missing area is asked; window/budget resolved by code; booked only after 'yes' and verified",
       "actual": "end state: sessions completed×1; new bookings=1; operations book:succeeded×1; tool calls book×1, get_booking_status×1, get_provider×1, hold_slot×1, search_providers×1; model calls=9 (rejected 0)",
       "result": "pass",
-      "notes": "PDF §1 example 1; §3 collect only missing details, approval; E01, E38; test `test_e01_plumber_asks_only_for_area_then_books_after_approval`; 1.1 s"
+      "notes": "PDF §1 example 1; §3 collect only missing details, approval; E01, E38; test `test_e01_plumber_asks_only_for_area_then_books_after_approval`; 0.72 s"
     },
     {
       "id": "S02",
@@ -22,7 +22,7 @@
       "expected": "Existing booking found via list_bookings; card shows old and new slot; moved only after approval, verified",
       "actual": "end state: sessions completed×1; new bookings=0; operations reschedule:succeeded×1; tool calls get_provider×1, list_bookings×2, reschedule×1, search_providers×1; model calls=5 (rejected 0)",
       "result": "pass",
-      "notes": "PDF §1 example 2; E02; test `test_e02_move_ac_servicing_to_saturday`; 0.75 s"
+      "notes": "PDF §1 example 2; E02; test `test_e02_move_ac_servicing_to_saturday`; 0.54 s"
     },
     {
       "id": "S03",
@@ -30,7 +30,7 @@
       "expected": "Provider taken from list_bookings (not chat history); only slots at/after 10:00; booked after approval",
       "actual": "end state: sessions awaiting_approval×1; new bookings=0; operations none; tool calls get_provider×2, hold_slot×1, list_bookings×1, search_providers×1; model calls=9 (rejected 0)",
       "result": "pass",
-      "notes": "PDF §1 example 3; E03; test `test_e03_same_electrician_resolved_from_list_bookings`; 0.8 s"
+      "notes": "PDF §1 example 3; E03; test `test_e03_same_electrician_resolved_from_list_bookings`; 0.53 s"
     },
     {
       "id": "S04",
@@ -38,7 +38,7 @@
       "expected": "Other details kept; old card invalidated; the new card needs fresh approval",
       "actual": "end state: sessions awaiting_approval×1; new bookings=0; operations none; tool calls get_provider×2, hold_slot×2, search_providers×2; model calls=13 (rejected 0)",
       "result": "pass",
-      "notes": "PDF §3 preserve context on correction, material change; E04; test `test_e04_correction_keeps_other_facts_and_invalidates_the_card`; 1.04 s"
+      "notes": "PDF §3 preserve context on correction, material change; E04; test `test_e04_correction_keeps_other_facts_and_invalidates_the_card`; 0.87 s"
     },
     {
       "id": "S05",
@@ -46,7 +46,7 @@
       "expected": "Review reaches the model only as escaped data; a model obeying it is rejected; no booking, nothing saved to memory",
       "actual": "end state: sessions awaiting_approval×1; new bookings=0; operations none; tool calls get_provider×1, hold_slot×1, search_providers×1; model calls=9 (rejected 1)",
       "result": "pass",
-      "notes": "PDF §2/§3 untrusted tool output; E16; test `test_e16_review_injection_cannot_trigger_a_booking`; 0.63 s"
+      "notes": "PDF §2/§3 untrusted tool output; E16; test `test_e16_review_injection_cannot_trigger_a_booking`; 0.45 s"
     },
     {
       "id": "S06",
@@ -62,7 +62,7 @@
       "expected": "Delimiters escaped; review text changes no state",
       "actual": "end state: sessions awaiting_approval×1; new bookings=0; operations none; tool calls get_provider×1, hold_slot×1, search_providers×1; model calls=8 (rejected 0)",
       "result": "pass",
-      "notes": "PDF §3 untrusted output; E40; test `test_e40_review_delimiter_breakout_is_escaped`; 0.7 s"
+      "notes": "PDF §3 untrusted output; E40; test `test_e40_review_delimiter_breakout_is_escaped`; 0.51 s"
     },
     {
       "id": "S08",
@@ -70,7 +70,7 @@
       "expected": "Rejected by the per-turn enum and retried; no side effect",
       "actual": "end state: sessions comparing×1; new bookings=0; operations none; tool calls search_providers×1; model calls=9 (rejected 4)",
       "result": "pass",
-      "notes": "Guardrail G2; E25; test `test_e25_invented_provider_id_is_rejected_by_the_enum`; 1.02 s"
+      "notes": "Guardrail G2; E25; test `test_e25_invented_provider_id_is_rejected_by_the_enum`; 0.34 s"
     },
     {
       "id": "S09",
@@ -78,7 +78,7 @@
       "expected": "Grounding check catches it; code template used; the user never sees the wrong price",
       "actual": "end state: sessions collecting×1; new bookings=0; operations none; tool calls none; model calls=4 (rejected 2)",
       "result": "pass",
-      "notes": "Guardrail G6; E26; test `test_e26_misquoted_price_never_reaches_the_user`; 0.35 s"
+      "notes": "Guardrail G6; E26; test `test_e26_misquoted_price_never_reaches_the_user`; 0.15 s"
     },
     {
       "id": "S10",
@@ -86,7 +86,7 @@
       "expected": "Claim discarded; nothing sent; nothing shown as booked",
       "actual": "end state: sessions executing×1; new bookings=0; operations book:approved×1; tool calls get_provider×1, hold_slot×1, search_providers×1; model calls=12 (rejected 4)",
       "result": "pass",
-      "notes": "PDF §3 never claim success until verified; E27; test `test_e27_premature_success_claim_is_never_shown_and_sends_nothing`; 1.68 s"
+      "notes": "PDF §3 never claim success until verified; E27; test `test_e27_premature_success_claim_is_never_shown_and_sends_nothing`; 0.52 s"
     },
     {
       "id": "S11",
@@ -94,7 +94,7 @@
       "expected": "Reported as pending verification, neither success nor failure; no retry without verification",
       "actual": "end state: sessions pending_verification×1; new bookings=1; operations book:pending_verification×1; tool calls book×1, get_booking_status×2, get_provider×1, hold_slot×1, search_providers×1; model calls=9 (rejected 0)",
       "result": "pass",
-      "notes": "PDF §3 timeout + source of truth; E27; test `test_e27_unverified_timeout_is_reported_as_pending_not_success`; 1.12 s"
+      "notes": "PDF §3 timeout + source of truth; E27; test `test_e27_unverified_timeout_is_reported_as_pending_not_success`; 0.61 s"
     },
     {
       "id": "S12",
@@ -102,7 +102,7 @@
       "expected": "Tool not offered in that state; rejected; zero side effect",
       "actual": "end state: sessions comparing×1; new bookings=0; operations none; tool calls search_providers×1; model calls=9 (rejected 4)",
       "result": "pass",
-      "notes": "Guardrail G1; E28; test `test_e28_book_while_comparing_is_not_even_offered`; 2.05 s"
+      "notes": "Guardrail G1; E28; test `test_e28_book_while_comparing_is_not_even_offered`; 0.3 s"
     },
     {
       "id": "S13",
@@ -110,7 +110,7 @@
       "expected": "Whole proposal rejected; nothing dispatched",
       "actual": "end state: sessions completed×1; new bookings=1; operations book:succeeded×1; tool calls book×1, get_booking_status×1, get_provider×1, hold_slot×1, search_providers×1; model calls=13 (rejected 4)",
       "result": "pass",
-      "notes": "Guardrail G7, approval enforced by code; E29; test `test_e29_book_with_arguments_differing_from_the_snapshot_is_rejected`; 1.74 s"
+      "notes": "Guardrail G7, approval enforced by code; E29; test `test_e29_book_with_arguments_differing_from_the_snapshot_is_rejected`; 0.66 s"
     },
     {
       "id": "S14",
@@ -118,7 +118,7 @@
       "expected": "Numbered menu lets the user continue without the model; no approval bypass",
       "actual": "end state: sessions awaiting_approval×1; new bookings=0; operations none; tool calls get_provider×1, hold_slot×1, search_providers×1; model calls=11 (rejected 4)",
       "result": "pass",
-      "notes": "Guardrail G9, clear outcome on every exit; E30; test `test_e30_degraded_menu_keeps_collecting_safely`; 1.01 s"
+      "notes": "Guardrail G9, clear outcome on every exit; E30; test `test_e30_degraded_menu_keeps_collecting_safely`; 0.46 s"
     },
     {
       "id": "S15",
@@ -126,7 +126,7 @@
       "expected": "Never claims success or failure; no second booking",
       "actual": "end state: sessions pending_verification×1; new bookings=1; operations book:pending_verification×1; tool calls book×1, get_booking_status×4, get_provider×1, hold_slot×1, search_providers×1; model calls=9 (rejected 0)",
       "result": "pass",
-      "notes": "PDF §3 exhausted retries, unexpected errors; E39; test `test_e39_unknown_operation_with_broken_model_never_claims_or_rebooks`; 1.2 s"
+      "notes": "PDF §3 exhausted retries, unexpected errors; E39; test `test_e39_unknown_operation_with_broken_model_never_claims_or_rebooks`; 0.65 s"
     },
     {
       "id": "S16",
@@ -134,7 +134,7 @@
       "expected": "Actual quote shown; no approval card for an over-budget price",
       "actual": "end state: sessions comparing×1; new bookings=0; operations none; tool calls get_provider×1, hold_slot×1, search_providers×1; model calls=8 (rejected 0)",
       "result": "pass",
-      "notes": "PDF §2 quoted price may differ, §3 price change; E08; test `test_quote_above_budget_is_not_offered_for_approval`; 0.73 s"
+      "notes": "PDF §2 quoted price may differ, §3 price change; E08; test `test_quote_above_budget_is_not_offered_for_approval`; 0.37 s"
     },
     {
       "id": "S17",
@@ -142,7 +142,7 @@
       "expected": "Explained; availability re-checked; a new card needs fresh approval; nothing booked",
       "actual": "end state: sessions awaiting_approval×1; new bookings=0; operations none; tool calls get_provider×2, hold_slot×2, search_providers×2; model calls=12 (rejected 0)",
       "result": "pass",
-      "notes": "PDF §2 hold_expired; E09; test `test_expired_hold_at_yes_rechecks_and_needs_fresh_approval`; 1.13 s"
+      "notes": "PDF §2 hold_expired; E09; test `test_expired_hold_at_yes_rechecks_and_needs_fresh_approval`; 0.61 s"
     },
     {
       "id": "S18",
@@ -150,7 +150,7 @@
       "expected": "Saved as explicit; next session uses them as visible defaults; area not re-asked",
       "actual": "end state: sessions awaiting_approval×1, collecting×1; new bookings=0; operations none; tool calls get_provider×1, hold_slot×1, search_providers×1; model calls=6 (rejected 0)",
       "result": "pass",
-      "notes": "PDF §3 persistent memory across sessions; E19; test `test_e19_explicit_preferences_are_reused_in_a_later_session`; 0.63 s"
+      "notes": "PDF §3 persistent memory across sessions; E19; test `test_e19_explicit_preferences_are_reused_in_a_later_session`; 0.39 s"
     },
     {
       "id": "S19",
@@ -158,7 +158,7 @@
       "expected": "Saved as an unconfirmed inferred suggestion; unused until the user confirms; then applied, still marked inferred",
       "actual": "end state: sessions awaiting_approval×2, completed×1; new bookings=1; operations book:succeeded×3; tool calls book×1, get_booking_status×1, get_provider×3, hold_slot×3, search_providers×3; model calls=19 (rejected 0)",
       "result": "pass",
-      "notes": "PDF §3 explicit vs inferred; E19; test `test_e19_inferred_suggestion_is_unused_until_confirmed`; 2.03 s"
+      "notes": "PDF §3 explicit vs inferred; E19; test `test_e19_inferred_suggestion_is_unused_until_confirmed`; 1.69 s"
     },
     {
       "id": "S20",
@@ -166,7 +166,7 @@
       "expected": "Correction used next session; after forgetting, the area is asked again and the old values never reach the model",
       "actual": "end state: sessions awaiting_approval×1, collecting×2; new bookings=0; operations none; tool calls get_provider×1, hold_slot×1, search_providers×1; model calls=9 (rejected 0)",
       "result": "pass",
-      "notes": "PDF §3 inspect/correct/forget; E20; test `test_e20_correct_then_forget_apply_from_the_next_turn`; 1.02 s"
+      "notes": "PDF §3 inspect/correct/forget; E20; test `test_e20_correct_then_forget_apply_from_the_next_turn`; 0.89 s"
     },
     {
       "id": "S21",
@@ -174,7 +174,7 @@
       "expected": "Rejected by the semantic check; nothing stored",
       "actual": "end state: sessions awaiting_approval×1; new bookings=0; operations none; tool calls get_provider×1, hold_slot×1, search_providers×1; model calls=6 (rejected 1)",
       "result": "pass",
-      "notes": "PDF §3 untrusted input can't alter state; E40; test `test_e40_model_cannot_save_memory_the_user_did_not_ask_for`; 0.55 s"
+      "notes": "PDF §3 untrusted input can't alter state; E40; test `test_e40_model_cannot_save_memory_the_user_did_not_ask_for`; 0.45 s"
     },
     {
       "id": "S22",
@@ -182,7 +182,7 @@
       "expected": "Only relevant, current, confirmed memories reach the model; no forgotten/unconfirmed/stale/other-user facts; no prior chat",
       "actual": "end state: sessions awaiting_approval×1, completed×6; new bookings=0; operations none; tool calls get_provider×1, hold_slot×1, search_providers×1; model calls=5 (rejected 0)",
       "result": "pass",
-      "notes": "PDF §3 context management; E21; test `test_e21_only_relevant_current_confirmed_memories_reach_the_model`; 0.47 s"
+      "notes": "PDF §3 context management; E21; test `test_e21_only_relevant_current_confirmed_memories_reach_the_model`; 0.26 s"
     },
     {
       "id": "S23",
@@ -190,7 +190,7 @@
       "expected": "Every model call's logged messages/tools equal what the model received, with byte counts",
       "actual": "end state: sessions awaiting_approval×1, completed×6; new bookings=0; operations none; tool calls get_provider×1, hold_slot×1, search_providers×1; model calls=5 (rejected 0)",
       "result": "pass",
-      "notes": "PDF §3 log context each turn and prove it; E21; test `test_e21_the_logged_context_is_exactly_what_the_model_received`; 0.43 s"
+      "notes": "PDF §3 log context each turn and prove it; E21; test `test_e21_the_logged_context_is_exactly_what_the_model_received`; 0.38 s"
     },
     {
       "id": "S24",
@@ -198,7 +198,7 @@
       "expected": "Every request within the 4,096-byte cap; reviews dropped before memories",
       "actual": "end state: sessions awaiting_approval×1, completed×6; new bookings=0; operations none; tool calls get_provider×1, hold_slot×1, search_providers×1; model calls=5 (rejected 0)",
       "result": "pass",
-      "notes": "PDF §3 fixed context budget; E22; test `test_e22_every_request_fits_the_cap_with_room_for_a_retry`; 0.48 s"
+      "notes": "PDF §3 fixed context budget; E22; test `test_e22_every_request_fits_the_cap_with_room_for_a_retry`; 0.45 s"
     },
     {
       "id": "S25",
@@ -206,7 +206,7 @@
       "expected": "Refused with a clear message; no model call; nothing changed",
       "actual": "end state: sessions collecting×1, completed×6; new bookings=0; operations none; tool calls none; model calls=0 (rejected 0)",
       "result": "pass",
-      "notes": "PDF §3 context budget, adversarial input; E22; test `test_e22_an_oversized_message_is_refused_before_any_model_call`; 0.07 s"
+      "notes": "PDF §3 context budget, adversarial input; E22; test `test_e22_an_oversized_message_is_refused_before_any_model_call`; 0.05 s"
     },
     {
       "id": "S26",
@@ -214,7 +214,7 @@
       "expected": "Detected without a user message; replacement within the original constraints, never the same provider; booked only after fresh approval",
       "actual": "end state: sessions completed×2; new bookings=2; operations book:succeeded×2; tool calls book×2, get_booking_status×2, get_provider×1, hold_slot×2, list_bookings×1, search_providers×2; model calls=10 (rejected 0); notifications=1",
       "result": "pass",
-      "notes": "PDF §3 proactive follow-up; E24; test `test_e24_cancellation_is_detected_and_a_replacement_needs_fresh_approval`; 1.46 s"
+      "notes": "PDF §3 proactive follow-up; E24; test `test_e24_cancellation_is_detected_and_a_replacement_needs_fresh_approval`; 1.38 s"
     },
     {
       "id": "S27",
@@ -222,7 +222,7 @@
       "expected": "Status is checked before anything else; exactly one booking; success shown only once verified",
       "actual": "book calls=1, status checks=1, bookings=1; reply: Booked and verified with the provider system: Lokesh Plumbing for plum…; end state: sessions completed×1; new bookings=1; operations book:succeeded×1; tool calls book×1, get_booking_status×1, get_provider×1, hold_slot×1, search_providers×1; model calls=9 (rejected 0)",
       "result": "pass",
-      "notes": "PDF §3 timeout after possible success; E10; test `test_s27_timeout_after_success`; 0.99 s"
+      "notes": "PDF §3 timeout after possible success; E10; test `test_s27_timeout_after_success`; 0.6 s"
     },
     {
       "id": "S28",
@@ -230,7 +230,7 @@
       "expected": "Status check says not booked; one same-key retry; one booking; verified success",
       "actual": "book calls=2 with 1 key(s); bookings=1; end state: sessions completed×1; new bookings=1; operations book:succeeded×1; tool calls book×2, get_booking_status×2, get_provider×1, hold_slot×1, search_providers×1; model calls=9 (rejected 0)",
       "result": "pass",
-      "notes": "PDF §3 timeout/retry correctness; E11; test `test_s28_timeout_without_booking_retries_with_the_same_key`; 1.04 s"
+      "notes": "PDF §3 timeout/retry correctness; E11; test `test_s28_timeout_without_booking_retries_with_the_same_key`; 0.71 s"
     },
     {
       "id": "S29",
@@ -238,7 +238,7 @@
       "expected": "Reported as not booked with the reason; no booking; old approval can't be reused",
       "actual": "state=conflict, bookings=0; repeat yes → I couldn't complete the booking: someone else took that slot…; end state: sessions conflict×1; new bookings=0; operations book:failed×1; tool calls book×1, get_booking_status×1, get_provider×1, hold_slot×1, search_providers×1; model calls=9 (rejected 0)",
       "result": "pass",
-      "notes": "PDF §3 tool failures / unexpected errors; E12; test `test_s29_slot_taken`; 1.13 s"
+      "notes": "PDF §3 tool failures / unexpected errors; E12; test `test_s29_slot_taken`; 0.6 s"
     },
     {
       "id": "S30",
@@ -246,7 +246,7 @@
       "expected": "Conflict reported; original booking unchanged; nothing moved without a new approval",
       "actual": "state=conflict; booking slot unchanged=True, status=confirmed; end state: sessions conflict×1; new bookings=0; operations reschedule:failed×1; tool calls get_provider×1, list_bookings×2, reschedule×1, search_providers×1; model calls=5 (rejected 0)",
       "result": "pass",
-      "notes": "PDF §3 slot conflict; E12; test `test_s30_reschedule_conflict`; 0.82 s"
+      "notes": "PDF §3 slot conflict; E12; test `test_s30_reschedule_conflict`; 0.42 s"
     },
     {
       "id": "S31",
@@ -254,7 +254,7 @@
       "expected": "One operation, one booking; the second 'yes' reports the same result",
       "actual": "operations=1, bookings=1, book calls=1; end state: sessions completed×1; new bookings=1; operations book:succeeded×1; tool calls book×1, get_booking_status×1, get_provider×1, hold_slot×1, search_providers×1; model calls=9 (rejected 0)",
       "result": "pass",
-      "notes": "PDF §3 repeated confirmation; E06; test `test_s31_repeated_confirmation`; 1.24 s"
+      "notes": "PDF §3 repeated confirmation; E06; test `test_s31_repeated_confirmation`; 0.7 s"
     },
     {
       "id": "S32",
@@ -262,7 +262,7 @@
       "expected": "The old card is refused with an explanation; only the newly shown card can be approved",
       "actual": "stale yes → bookings=0: Those details are no longer current, so I haven't taken any action. Pl…; current card → completed, bookings=1; end state: sessions completed×1; new bookings=1; operations book:succeeded×1; tool calls book×1, get_booking_status×1, get_provider×2, hold_slot×2, search_providers×2; model calls=14 (rejected 0)",
       "result": "pass",
-      "notes": "PDF §3 changed provider/slot/price invalidates approval; E07; test `test_s32_stale_card_after_a_change`; 2.17 s"
+      "notes": "PDF §3 changed provider/slot/price invalidates approval; E07; test `test_s32_stale_card_after_a_change`; 0.92 s"
     },
     {
       "id": "S33",
@@ -270,7 +270,7 @@
       "expected": "After restart the outcome is verified, not guessed; exactly one booking; no second dispatch",
       "actual": "after crash state=executing; after restart → completed, bookings=1, book calls=1; end state: sessions completed×1; new bookings=1; operations book:succeeded×1; tool calls book×1, get_booking_status×1, get_provider×1, hold_slot×1, search_providers×1; model calls=9 (rejected 0)",
       "result": "pass",
-      "notes": "PDF §3 restart mid-booking; E13; test `test_s33_restart_mid_booking`; 1.15 s"
+      "notes": "PDF §3 restart mid-booking; E13; test `test_s33_restart_mid_booking`; 0.71 s"
     },
     {
       "id": "S34",
@@ -278,7 +278,7 @@
       "expected": "Clear stop message naming the limit; no tool call or booking after it; run exit recorded",
       "actual": "reply: I stopped because a safety limit was reached (logical_model_calls). Nothing new was booked or changed.; state=collecting; tool calls=0; end state: sessions collecting×1; new bookings=0; operations none; tool calls none; model calls=1 (rejected 0)",
       "result": "pass",
-      "notes": "PDF §3 bounded execution / limit exhaustion; E23; test `test_s34_limit_exhaustion`; 0.2 s"
+      "notes": "PDF §3 bounded execution / limit exhaustion; E23; test `test_s34_limit_exhaustion`; 0.09 s"
     },
     {
       "id": "S35",
@@ -286,7 +286,7 @@
       "expected": "User told it will be retried; worker retries with the same key when due; verified; user notified once",
       "actual": "turn → retry_wait; worker job done; cancel calls=2 with 1 key; notifications=1; end state: sessions completed×1; new bookings=0; operations cancel:succeeded×1; tool calls cancel×2, list_bookings×2; model calls=3 (rejected 0); notifications=1",
       "result": "pass",
-      "notes": "PDF §2 cancel 503 / §3 tool failures and exhausted retries; E14; test `test_s35_cancel_503_is_finished_in_the_background`; 0.84 s"
+      "notes": "PDF §2 cancel 503 / §3 tool failures and exhausted retries; E14; test `test_s35_cancel_503_is_finished_in_the_background`; 0.41 s"
     },
     {
       "id": "S36",
@@ -294,7 +294,7 @@
       "expected": "User notified with the reasons; nothing loosened; no card",
       "actual": "end state: sessions collecting×1, completed×1; new bookings=1; operations book:succeeded×1; tool calls book×1, get_booking_status×1, get_provider×1, hold_slot×1, list_bookings×1, search_providers×2; model calls=9 (rejected 0); notifications=1",
       "result": "pass",
-      "notes": "PDF §3 proactive follow-up; E24; test `test_e24_no_replacement_within_constraints_is_explained_not_loosened`; 1.14 s"
+      "notes": "PDF §3 proactive follow-up; E24; test `test_e24_no_replacement_within_constraints_is_explained_not_loosened`; 1.09 s"
     },
     {
       "id": "S37",
@@ -302,7 +302,7 @@
       "expected": "One event, one follow-up, one notification; redelivered with a stable ID until acknowledged",
       "actual": "end state: sessions awaiting_approval×1, collecting×1; new bookings=0; operations none; tool calls get_provider×1, hold_slot×1, list_bookings×1, search_providers×1; model calls=0 (rejected 0); notifications=1",
       "result": "pass",
-      "notes": "PDF §3 proactive follow-up; E44; test `test_e44_duplicate_deliveries_make_one_event_one_follow_up_one_notification`; 0.32 s"
+      "notes": "PDF §3 proactive follow-up; E44; test `test_e44_duplicate_deliveries_make_one_event_one_follow_up_one_notification`; 0.38 s"
     }
   ]
 }
