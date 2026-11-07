@@ -22,8 +22,14 @@ from errand_agent.mocks.backend import MockBackend
 from errand_agent.tools.context import ToolContext
 from errand_agent.tools.errors import ToolError, ToolRejectedError
 from errand_agent.tools.models import (
+    BookInput,
+    BookOutput,
+    GetBookingStatusInput,
+    GetBookingStatusOutput,
     GetProviderInput,
     GetProviderOutput,
+    HoldSlotInput,
+    HoldSlotOutput,
     ListBookingsInput,
     ListBookingsOutput,
     SearchProvidersInput,
@@ -50,6 +56,15 @@ class ToolClient:
 
     def get_provider(self, ctx: ToolContext, args: dict[str, Any]) -> GetProviderOutput:
         return self._invoke("get_provider", GetProviderInput, args, ctx, self._backend.get_provider)
+
+    def hold_slot(self, ctx: ToolContext, args: dict[str, Any]) -> HoldSlotOutput:
+        return self._invoke("hold_slot", HoldSlotInput, args, ctx, self._backend.hold_slot)
+
+    def book(self, ctx: ToolContext, args: dict[str, Any]) -> BookOutput:
+        return self._invoke("book", BookInput, args, ctx, self._backend.book)
+
+    def get_booking_status(self, ctx: ToolContext, args: dict[str, Any]) -> GetBookingStatusOutput:
+        return self._invoke("get_booking_status", GetBookingStatusInput, args, ctx, self._backend.get_booking_status)
 
     def list_bookings(self, ctx: ToolContext, args: dict[str, Any]) -> ListBookingsOutput:
         return self._invoke("list_bookings", ListBookingsInput, args, ctx, self._backend.list_bookings)

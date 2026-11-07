@@ -13,7 +13,7 @@
 
 ## Stage 2 — exact mock tools (in progress)
 - [x] 2a Tool contract models (extra=forbid inputs), errors with effect knowledge (none/unknown), internal ToolContext/Fence; deterministic seeded catalog (3–8 providers per service×area, injection review on each pair's cheapest), demo history; search/get_provider/list_bookings; ToolClient validation + per-call sanitized trace with latency. Tests: 28 passed.
-- [ ] 2b hold_slot (10 min, quote drift), book (70/15/15, half of timeouts booked, hold_expired), get_booking_status; durable RNG; replay records; backend fencing.
+- [x] 2b hold_slot (10 min, configurable quote drift, schedule/availability checks), book (70/15/15 with half of timeouts booked; forced-outcome FIFO; hold_expired), get_booking_status by hold or key (authoritative; configurable 503s); durable seeded RNG/IDs survive restart; replay records commit with effects; backend fencing (claim generation + reserved attempt + snapshot/key match). Tests: 56 passed.
 - [ ] 2c cancel (first call 503 per key, durable phase), reschedule (configured slot_conflict).
 
 ## Stage 3 — approval + journal + booking recovery (not started)
