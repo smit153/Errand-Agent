@@ -44,14 +44,36 @@ class ToolDef:
             "function": {
                 "name": self.name,
                 "description": self.description,
-                "parameters": _strip_titles(self.args.model_json_schema()),
+                "parameters": _strip_titles(_inline_refs(self.args.model_json_schema())),
             },
         }
 
 
 def _strip_titles(schema: Any) -> Any:
+    """Drop titles and present single-value Literals (`const`) as one-element enums, like all ID fields."""
     if isinstance(schema, dict):
-        return {k: _strip_titles(v) for k, v in schema.items() if k != "title"}
+        node = {k: _strip_titles(v) for k, v in schema.items() if k != "title"}
+        if "const" in node and "enum" not in node:
+            node["enum"] = [node.pop("const")]
+        return node
     if isinstance(schema, list):
         return [_strip_titles(v) for v in schema]
     return schema
+
+
+def _inline_refs(schema: dict[str, Any]) -> dict[str, Any]:
+    """Replace `$ref`s to local `$defs` with the definitions themselves (small models read flat schemas better)."""
+    defs = schema.get("$defs", {})
+
+    def walk(node: Any) -> Any:
+        if isinstance(node, dict):
+            ref = node.get("$ref")
+            if isinstance(ref, str) and ref.startswith("#/$defs/"):
+                return walk(defs[ref.removeprefix("#/$defs/")])
+            return {k: walk(v) for k, v in node.items() if k != "$defs"}
+        if isinstance(node, list):
+            return [walk(v) for v in node]
+        return node
+
+    result: dict[str, Any] = walk(schema)
+    return result

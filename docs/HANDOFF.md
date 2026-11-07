@@ -2,7 +2,7 @@
 
 ## Current checkpoint — stage 4 in progress (2026-11-07)
 
-User said "continue to stage 4". Plan: 4a parsing/ranking (done: `errand_agent/workflow/{parsing,ranking}.py`), 4b model layer, 4c agent orchestrator + scripted scenarios, 4d real Qwen smoke (ask the user before downloading several GB). Then continue with stage 5 per the build plan unless the user says otherwise. Commits: no AI attribution lines.
+User said "continue to stage 4". Done: 4a parsing/ranking, 4b model layer (`errand_agent/llm/`), 4c agent (`workflow/agent.py` + `agent_tools.py` + `request.py`, migration 0003) with 21 scripted scenarios; 256 tests pass. Next: 4d real Qwen 3.5 smoke (E42) — needs Ollama + several-GB model download and ~4–5 GB free RAM; ask the user first. Then continue with stage 5 per the build plan unless the user says otherwise. Commits: no AI attribution lines.
 
 ## Earlier checkpoint — stages 1–3 done and reviewed; pre-stage-4 requests handled (2026-11-07)
 

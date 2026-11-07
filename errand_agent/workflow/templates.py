@@ -6,12 +6,40 @@ never from model prose.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import datetime
+from typing import Protocol
 from zoneinfo import ZoneInfo
 
 from errand_agent.workflow.snapshots import BookSnapshot, CancelSnapshot, RescheduleSnapshot, Snapshot
 
 LOCAL_TZ = ZoneInfo("Asia/Kolkata")
+
+
+class RankingOptionLike(Protocol):
+    @property
+    def option_no(self) -> int: ...
+    @property
+    def provider_id(self) -> str: ...
+    @property
+    def provider_name(self) -> str: ...
+    @property
+    def slot(self) -> datetime: ...
+    @property
+    def price_inr(self) -> int: ...
+    @property
+    def rating(self) -> float: ...
+
+
+class BookingLike(Protocol):
+    @property
+    def booking_id(self) -> str: ...
+    @property
+    def service(self) -> str: ...
+    @property
+    def provider_name(self) -> str: ...
+    @property
+    def slot(self) -> datetime: ...
 
 
 def money(amount_inr: int) -> str:
@@ -165,3 +193,160 @@ def not_done(action: str, snap: Snapshot, code: str) -> str:
         old = when(snap.old_slot) if isinstance(snap, RescheduleSnapshot) else "its original time"
         tail = f"Your booking is unchanged at {old}. Any alternative needs your fresh approval."
     return f"I couldn't complete the {_ACTION_NOUN.get(action, action)}: {reason}. {tail}"
+
+
+# ---------------------------------------------------------------------- conversation (agent) templates
+_FIELD_QUESTIONS = {
+    "service": "what service you need (plumber, electrician, AC servicing, carpenter or cleaning)",
+    "area": "which area you're in (Indiranagar, Koramangala, HSR Layout, Whitefield or Jayanagar)",
+    "date": "which day or days suit you",
+    "time": "what time of day suits you",
+    "budget": "your budget (or say 'no budget')",
+    "provider": "which provider you mean",
+    "booking": "which booking you mean",
+}
+
+
+def ask_fields(fields: list[str]) -> str:
+    parts = [_FIELD_QUESTIONS.get(f, f) for f in fields]
+    joined = parts[0] if len(parts) == 1 else ", ".join(parts[:-1]) + " and " + parts[-1]
+    return f"Could you tell me {joined}?"
+
+
+def clarification_notes(reasons: list[str]) -> str:
+    return " ".join(f"{r[0].upper()}{r[1:]}." for r in reasons)
+
+
+def window_text(start: object, end: object) -> str:
+    return f"{start:%a %d %b}" if start == end else f"{start:%a %d %b}–{end:%a %d %b}"
+
+
+def comparison(options: Sequence[RankingOptionLike], heading: str) -> str:
+    lines = [heading]
+    for o in options:
+        lines.append(
+            f"  {o.option_no}. {o.provider_name} ({o.provider_id}) — {when(o.slot)} — "
+            f"{money(o.price_inr)} — ★{o.rating:.1f}"
+        )
+    return "\n".join(lines)
+
+
+def no_match(over_budget: int, no_slot: int, not_preferred: int) -> str:
+    reasons = []
+    if over_budget:
+        reasons.append(f"{over_budget} over your budget")
+    if no_slot:
+        reasons.append(f"{no_slot} with no slot in your time window")
+    if not_preferred:
+        reasons.append(f"{not_preferred} not the provider you asked for")
+    detail = f" ({'; '.join(reasons)})" if reasons else ""
+    return (
+        f"I couldn't find an option that fits all your constraints{detail}. "
+        "I haven't loosened anything: tell me if you'd like to change the budget, day or time."
+    )
+
+
+def quote_over_budget(quote_inr: int, budget_inr: int) -> str:
+    return (
+        f"The held quote is {money(quote_inr)}, above your budget of {money(budget_inr)}, so I haven't asked you to "
+        "approve it. Would you like to raise the budget or look at other options?"
+    )
+
+
+def booking_choices(bookings: Sequence[BookingLike]) -> str:
+    lines = ["I found more than one matching booking. Which one do you mean?"]
+    for b in bookings:
+        lines.append(f"  - {b.booking_id}: {service_label(b.service)} with {b.provider_name} on {when(b.slot)}")
+    return "\n".join(lines)
+
+
+def no_booking_found(service: str | None) -> str:
+    what = f"{service_label(service)} " if service else ""
+    return f"I couldn't find an upcoming {what}booking for you, so there's nothing to change."
+
+
+def no_history(service: str | None) -> str:
+    what = f"{service_label(service)} " if service else ""
+    return (
+        f"I couldn't find a previous {what}booking, so I don't know who you used last time. Which provider do you mean?"
+    )
+
+
+def several_previous_providers(names: list[str]) -> str:
+    return "You've used more than one provider for this before (" + ", ".join(names) + "). Which one do you mean?"
+
+
+def preferred_provider(name: str, provider_id: str) -> str:
+    return f"Last time you used {name} ({provider_id}); I'll look for them again."
+
+
+MODEL_FAILED = "I couldn't understand that reliably, so I haven't taken any action."
+NOT_SENT = (
+    "I couldn't prepare the approved request, so nothing has been sent. Your approval is kept; reply 1 to try again."
+)
+
+
+def menu(items: list[tuple[str, str]]) -> str:
+    lines = [MODEL_FAILED, "You can reply with a number:"]
+    lines += [f"  {i + 1}. {label}" for i, (_code, label) in enumerate(items)]
+    lines.append("Or set a detail directly, e.g. 'area: Koramangala', 'date: Saturday', 'budget: 1500'.")
+    return "\n".join(lines)
+
+
+def request_summary(facts: dict[str, str]) -> str:
+    if not facts:
+        return "I don't have any details for this request yet."
+    return "Here's what I have so far: " + "; ".join(f"{k}: {v}" for k, v in facts.items()) + "."
+
+
+STOPPED = "Okay, I've cleared this request. Nothing was booked or changed."
+BUSY_WITH_OPERATION = "I'm still finishing your earlier request, so I haven't started anything new yet."
+
+
+def options_heading(req: object) -> str:
+    """Heading for the comparison: the constraints code applied, rendered from validated facts."""
+    parts: list[str] = []
+    date = getattr(req, "date", None)
+    if date is not None:
+        parts.append(window_text(date.start, date.end))
+    time_window = getattr(req, "time", None)
+    if time_window is not None:
+        parts.append(time_window.source)
+    budget = getattr(req, "budget", None)
+    if budget is not None:
+        parts.append("no budget limit" if budget.max_inr is None else f"up to {money(budget.max_inr)}")
+    provider = getattr(req, "preferred_provider_name", None)
+    if provider:
+        parts.append(f"with {provider}")
+    service = getattr(req, "service", None)
+    label = service_label(service) if service else "provider"
+    return f"Best {label} options ({'; '.join(parts)}), cheapest first:"
+
+
+def quote_differs(search_price: int, quote: int) -> str:
+    return f"Note: the listed price was {money(search_price)}, but the held quote is {money(quote)}."
+
+
+def no_reschedule_slot(provider_name: str, start: object, end: object) -> str:
+    return f"{provider_name} has no open slot on {window_text(start, end)}, so your booking is unchanged. Another day?"
+
+
+def direct_field_unreadable(field: str, value: str) -> str:
+    return f"I couldn't read '{value}' as a {field}, so I haven't changed anything."
+
+
+def turn_limit(limit: str) -> str:
+    return f"I stopped because a safety limit was reached ({limit}). Nothing new was booked or changed."
+
+
+def tool_failed(tool: str) -> str:
+    return (
+        f"The provider system had a problem ({tool}), so I couldn't finish that step. Nothing was booked or "
+        "changed; please try again."
+    )
+
+
+KEEP_CARD = (
+    "I've kept the details above. Reply 'yes' or the confirmation code to approve them, or tell me what to change."
+)
+CARD_INVALIDATED = "Got it — I've updated the request, so the earlier approval card no longer applies."

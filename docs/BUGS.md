@@ -51,3 +51,31 @@ test now guards against regression. Entries are added as bugs are encountered, n
   sets it on reconciliation calls, and the client uses it when there is no fence.
 - **Regression test:** the test above asserts the order `book` → `get_booking_status` →
   `operation.finished` within the operation's trace.
+
+## BUG-004 — single-value ID enums reached the model as `const`, not `enum`
+
+- **Found:** 2026-11-07, stage 4c, by `tests/test_agent_scenarios.py::test_e01_plumber_asks_only_for_area_then_books_after_approval`
+  (`KeyError: 'enum'` reading the offered `ask_user` schema).
+- **What broke:** most per-turn tools offer exactly one legitimate value (the code-ranked option, the held
+  slot, the approved hold). Pydantic renders a one-value `Literal` as `{"const": ...}`, so those ID
+  fields didn't carry the explicit list of allowed values that G2 specifies. Validation still
+  rejected wrong values, but the model was shown a different, less explicit schema shape than intended.
+- **Why:** `ToolDef.spec()` passed Pydantic's JSON schema through unchanged; one- and many-value
+  enums produce different keywords.
+- **Fix:** `spec()` normalizes `const` to a one-element `enum`, so every ID field reads as a list of
+  allowed values (`errand_agent/llm/toolspec.py`).
+- **Regression test:** the E01 scenario asserts the offered `ask_user.fields` enum is exactly `["area"]`;
+  `test_valid_call_is_accepted_and_fully_traced` asserts the provider enum in the logged schema.
+
+## BUG-005 — "show what I have so far" dismissed the degraded-mode menu
+
+- **Found:** 2026-11-07, stage 4c, by `test_e30_degraded_menu_keeps_collecting_safely`
+  (`search_providers not offered`: the direct `area: Indiranagar` entry went to the model instead).
+- **What broke:** after repeated model failures the user picked the informational "status" item.
+  The menu was cleared, so the next deterministic `area: …` entry was treated as normal input and
+  sent back to the failing model. The degraded path was lost, though nothing unsafe happened.
+- **Why:** `_menu` cleared the menu before dispatching on the chosen item, including for the one
+  item that doesn't change anything.
+- **Fix:** "status" replies and returns early with the menu still active; only acting items clear it.
+- **Regression test:** the test above picks "2" (status) and then completes the request via `area: …`
+  without any extraction call.
