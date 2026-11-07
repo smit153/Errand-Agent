@@ -2,7 +2,8 @@
 
 - Validates raw arguments into the contract's Pydantic input model (invalid → no-effect rejection).
 - Passes internal context (user, session, run, fence) beside the arguments, never inside them.
-- Records one sanitized `tool.call` trace event per invocation with latency and outcome.
+- Commits a write-ahead `tool.attempt_started` event just before each tool call, then one sanitized
+  `tool.call` event with latency and outcome (same `call_id`). A crashed call keeps its start event.
 - Exposes fault-injection points so tests can simulate a crash before/after the backend call.
 """
 
@@ -12,6 +13,7 @@ import logging
 import time
 from collections.abc import Callable
 from typing import Any, TypeVar
+from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ValidationError
 
@@ -88,13 +90,18 @@ class ToolClient:
         ctx: ToolContext,
         fn: Callable[[In, ToolContext], Out],
     ) -> Out:
+        call_id = uuid4()
         started = time.perf_counter()
         try:
             inp = model.model_validate(args)
         except ValidationError as exc:
+            # Rejected before reaching the tool: there is no attempt, only the rejection event.
             err = ToolRejectedError(tool, "invalid_arguments", _validation_summary(exc))
-            self._trace(tool, args, ctx, started, error=err)
+            self._finished(tool, call_id, args, ctx, started, error=err)
             raise err from exc
+        dumped = inp.model_dump(mode="json")
+        # Write-ahead: committed before the call, so a call whose worker crashes still shows.
+        self._record("tool.attempt_started", self._base(tool, call_id, dumped, ctx), ctx)
         try:
             if self.fault:
                 self.fault("before_backend", tool, ctx)
@@ -102,14 +109,25 @@ class ToolClient:
             if self.fault:
                 self.fault("after_backend", tool, ctx)
         except ToolError as exc:
-            self._trace(tool, inp.model_dump(mode="json"), ctx, started, error=exc)
+            self._finished(tool, call_id, dumped, ctx, started, error=exc)
             raise
-        self._trace(tool, inp.model_dump(mode="json"), ctx, started, result=result)
+        self._finished(tool, call_id, dumped, ctx, started, result=result)
         return result
 
-    def _trace(
+    @staticmethod
+    def _base(tool: str, call_id: UUID, args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
+        return {
+            "tool": tool,
+            "call_id": str(call_id),
+            "args": args,
+            "attempt_id": str(ctx.fence.attempt_id) if ctx.fence else None,
+            "claim_generation": ctx.fence.generation if ctx.fence else None,
+        }
+
+    def _finished(
         self,
         tool: str,
+        call_id: UUID,
         args: dict[str, Any],
         ctx: ToolContext,
         started: float,
@@ -117,22 +135,20 @@ class ToolClient:
         result: BaseModel | None = None,
         error: ToolError | None = None,
     ) -> None:
-        payload: dict[str, Any] = {
-            "tool": tool,
-            "args": args,
-            "latency_ms": round((time.perf_counter() - started) * 1000, 3),
-            "attempt_id": str(ctx.fence.attempt_id) if ctx.fence else None,
-            "claim_generation": ctx.fence.generation if ctx.fence else None,
-        }
+        payload = self._base(tool, call_id, args, ctx)
+        payload["latency_ms"] = round((time.perf_counter() - started) * 1000, 3)
         if error is not None:
             payload["error"] = {"type": type(error).__name__, "code": error.code, "effect": error.effect}
         if result is not None:
             payload["result"] = result.model_dump(mode="json")
+        self._record("tool.call", payload, ctx)
+
+    def _record(self, kind: str, payload: dict[str, Any], ctx: ToolContext) -> None:
         try:
             with self._db.txn() as conn:
                 trace.record(
                     conn,
-                    "tool.call",
+                    kind,
                     payload,
                     at=self._clock.now(),
                     run_id=ctx.run_id,
@@ -141,7 +157,7 @@ class ToolClient:
                 )
         except Exception:
             # Tracing must never change a tool's outcome; record the failure loudly instead.
-            log.exception("failed to persist tool.call trace for %s", tool)
+            log.exception("failed to persist %s trace for %s", kind, payload.get("tool"))
 
 
 def _validation_summary(exc: ValidationError) -> str:

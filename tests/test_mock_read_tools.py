@@ -136,3 +136,49 @@ def test_every_call_is_traced_with_latency(tools: ToolClient, ctx: ToolContext, 
     assert ev["payload"]["tool"] == "list_bookings"
     assert ev["payload"]["latency_ms"] >= 0
     assert ev["payload"]["result"]["bookings"]
+
+
+def _events(db: Database, tool: str) -> list[tuple[str, dict[str, object]]]:
+    with db.txn() as conn:
+        rows = conn.execute(
+            "SELECT kind, payload FROM trace_events WHERE kind IN ('tool.attempt_started', 'tool.call')"
+            " AND payload->>'tool' = %s ORDER BY id",
+            (tool,),
+        ).fetchall()
+    return [(r["kind"], r["payload"]) for r in rows]
+
+
+def test_attempt_started_is_written_before_the_call_with_the_same_call_id(
+    tools: ToolClient, ctx: ToolContext, db: Database
+) -> None:
+    tools.list_bookings(ctx, {"user_id": DEMO_USER})
+    (started, finished) = _events(db, "list_bookings")
+    assert started[0] == "tool.attempt_started"
+    assert finished[0] == "tool.call"
+    assert started[1]["call_id"] == finished[1]["call_id"]
+    assert "result" not in started[1]
+
+
+class _CrashError(Exception):
+    pass
+
+
+def test_a_call_that_crashes_mid_flight_still_shows_its_start(
+    tools: ToolClient, ctx: ToolContext, db: Database
+) -> None:
+    def crash(point: str, _tool: str, _ctx: ToolContext) -> None:
+        if point == "after_backend":
+            raise _CrashError
+
+    tools.fault = crash
+    with pytest.raises(_CrashError):
+        tools.list_bookings(ctx, {"user_id": DEMO_USER})
+    assert [kind for kind, _ in _events(db, "list_bookings")] == ["tool.attempt_started"]
+
+
+def test_arguments_rejected_by_validation_never_start_an_attempt(
+    tools: ToolClient, ctx: ToolContext, db: Database
+) -> None:
+    with pytest.raises(ToolRejectedError):
+        tools.get_provider(ctx, {"provider_id": "bad id!"})
+    assert [kind for kind, _ in _events(db, "get_provider")] == ["tool.call"]

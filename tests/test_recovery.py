@@ -93,21 +93,28 @@ def _approved_booking(h: Harness, outcome: str) -> tuple[UUID, ProposedCall, str
 # ------------------------------------------------------------------ crash points (E13)
 @pytest.mark.invariant
 @pytest.mark.parametrize(
-    ("where", "point", "outcome", "traced_books", "attempts"),
+    ("where", "point", "outcome", "traced_books", "started_books", "attempts"),
     [
         # Attempt reserved, tool never called: status says not booked, then one same-key dispatch.
-        ("executor", "after_reserve", "success", 1, 2),
-        # Backend committed, client died before the reply (that call has no tool.call event; its
-        # attempt is journaled by operation.dispatch_reserved). Status says booked: no re-dispatch.
-        ("client", "after_backend", "success", 0, 1),
+        ("executor", "after_reserve", "success", 1, 1, 2),
+        # Backend committed, client died before the reply: no tool.call event, but the write-ahead
+        # tool.attempt_started shows the interrupted call. Status says booked: no re-dispatch.
+        ("client", "after_backend", "success", 0, 1, 1),
         # Timed out after booking, worker died before recording it: status says booked.
-        ("executor", "after_dispatch", "timeout_booked", 1, 1),
+        ("executor", "after_dispatch", "timeout_booked", 1, 1, 1),
         # Timed out without booking, worker died before recording: verify, then same-key retry.
-        ("executor", "after_dispatch", "timeout_lost", 2, 2),
+        ("executor", "after_dispatch", "timeout_lost", 2, 2, 2),
     ],
 )
 def test_restart_after_crash_reconciles_before_retry_and_books_once(
-    h: Harness, restart: Callable[[], Process], where: str, point: str, outcome: str, traced_books: int, attempts: int
+    h: Harness,
+    restart: Callable[[], Process],
+    where: str,
+    point: str,
+    outcome: str,
+    traced_books: int,
+    started_books: int,
+    attempts: int,
 ) -> None:
     op_id, call, hold_id = _approved_booking(h, outcome)
     if where == "executor":
@@ -127,6 +134,14 @@ def test_restart_after_crash_reconciles_before_retry_and_books_once(
     assert h.bookings_for(hold_id) == 1
     books = h.tool_calls("book")
     assert len(books) == traced_books
+    with h.db.txn() as conn:
+        started = conn.execute(
+            "SELECT count(*) AS n FROM trace_events WHERE kind = 'tool.attempt_started'"
+            " AND payload->>'tool' = 'book' AND operation_id = %s",
+            (op_id,),
+        ).fetchone()
+    assert started is not None
+    assert started["n"] == started_books  # every call that reached the tool is visible, crashed or not
     assert {b["args"]["idempotency_key"] for b in books} <= {h.op(op_id)["idempotency_key"]}
     dispatches = "SELECT count(*) FROM operation_attempts WHERE operation_id = %s AND kind = 'dispatch'"
     assert count(h.db, dispatches, (op_id,)) == attempts
