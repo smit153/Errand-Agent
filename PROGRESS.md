@@ -1,6 +1,6 @@
 # Progress
 
-**Build in progress (started 2026-11-07, user-approved).** Source of truth: `Orange_Engineering_Assignment.pdf` (no `ASSIGNMENT.md` exists; no `docs/DESIGN_REVISION_v2.md` exists — v2 is in docs/DESIGN.md + docs/DECISIONS.md §§1–16). Build plan: DECISIONS.md §15. **User checkpoint: stop after stage 3 (approval gate + booking recovery) and show test results.**
+**Build in progress (started 2026-11-07, user-approved).** Source of truth: `Orange_Engineering_Assignment.pdf`. The user reports adding `ASSIGNMENT.md` and `docs/DESIGN_REVISION_v2.md`, but on 2026-11-07 neither was in the working tree, any branch or stash, so the v2 cross-check is still pending; until then v2 is taken from docs/DESIGN.md + docs/DECISIONS.md §§1–16. Build plan: DECISIONS.md §15. Stages 1–3 done and reviewed at the user's checkpoint; stage 4 starts after the pre-stage-4 items below. Commits carry no AI attribution lines (user instruction).
 
 ## How to run checks
 `scripts/dev.sh scripts/check.sh` (from a shell in the `docker` group) runs inside the pinned Python 3.12 dev container: hash-verified install, `ruff format --check`, `ruff check`, `mypy --strict`, `pytest` against the Compose Postgres. Start Postgres first: `docker compose up -d --wait postgres`.
@@ -21,6 +21,17 @@
 - [x] 3b Executor: G7 exact-snapshot check (wrong tool/hold/key, extra or missing args → rejected, zero effect) then dispatch from the stored snapshot; durable attempt reservation with fence before each call; forced get_booking_status after every book (list_bookings for cancel/reschedule); same-key retry only after a verified "not done"; lifetime caps (3 dispatches/6 reconciliations) and run caps (tool calls, 300 s deadline) end with truthful outcomes (unknown → pending_verification, never claimed); cancel 503 → durable retry_wait + job row, same-key retry when due. Migration 0002. Real bugs BUG-001..003 logged in docs/BUGS.md with regression tests. Tests: 126 passed.
 - [x] 3c RecoveryService (take over expired claim → fence old generation → fresh run → resume unresolved ops). Crash points: after reserve / after backend commit / after dispatch (timeout booked and lost) → status checked before any re-dispatch, exactly one booking. Crash after cancel retry reached backend → same-key resume. Repeat confirmation + execution after restart replays the same effect. Restart before dispatch never executes without a valid proposal. Live claim blocks a second worker; delayed worker (stalled before call / before recording) is fenced and cannot duplicate or overwrite; three unrelated sessions book concurrently. Concurrency tests stable over 5 repeated runs.
 - Gate result (E05–E13, E23, E29, E32): **137 passed** (86 marked `invariant`); ruff, ruff format, mypy --strict clean.
+
+## Pre-stage-4 requests (2026-11-07)
+- [x] Git identity fixed and AI attribution removed from history by the user; no attribution in future commits.
+- [ ] Cross-check `ASSIGNMENT.md` / `docs/DESIGN_REVISION_v2.md` against DESIGN.md/DECISIONS.md — **blocked: files not found**.
+- [x] Write-ahead `tool.attempt_started` trace event before every tool call (same `call_id` as the completion `tool.call`); a crashed call still shows. 140 tests pass.
+- [x] Open items recorded below.
+- [x] README with setup and the PyPI mirror/hash-verification note.
+
+## Open items
+- [ ] **Per-operation model-call and active-time lifetime limits (stage 4).** Schema has `operations.physical_model_calls` (CHECK ≤ 40) and `operations.active_ms` (CHECK ≤ 300000), but nothing charges them yet. Wire them up in stage 4 with the model adapter: reserve per physical model request, charge active time (model, tool and lock waits; not queued retry or user waiting), conservatively charge outstanding work after a crash, and test that a new run cannot reset them (E23).
+- [ ] **Retry worker (stage 6).** `operation_retry` job rows are written on a cancel 503 (`retry_wait`, `next_retry_at`), but no worker consumes them; retries currently happen only via `OperationExecutor.resume`. Stage 6: `FOR UPDATE SKIP LOCKED` job loop, due scheduling, claim/generation fencing, crash recovery, original lifetime budgets (E14/E31/E32).
 
 ## Environment notes
 - Host has only Python 3.14; toolchain runs in Docker (`Dockerfile.dev`, runs as uid 1000).

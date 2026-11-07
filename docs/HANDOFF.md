@@ -1,6 +1,14 @@
 # Handoff
 
-## Current checkpoint — stages 1–3 done; STOPPED for user review (2026-11-07)
+## Current checkpoint — stages 1–3 done and reviewed; pre-stage-4 requests handled (2026-11-07)
+
+User follow-ups after the stage-3 checkpoint:
+- Git identity is now `smit153` (set by the user) and history has no AI attribution. **Never add Co-Authored-By or "Generated with" lines to commits.**
+- Write-ahead `tool.attempt_started` event added before every tool call (`errand_agent/tools/client.py`); completion `tool.call` shares its `call_id`.
+- README.md added (setup, mirror and hash verification). Open items (per-operation model-call/time limits → stage 4; retry worker → stage 6) are in PROGRESS.md.
+- **Pending:** the user says they added `ASSIGNMENT.md` and `docs/DESIGN_REVISION_v2.md`, but neither file was found (working tree, branches, stash, home and C:\Users searched). When they appear, cross-check them against DESIGN.md/DECISIONS.md and report anything from v2 that's missing, before starting stage 4.
+
+## Previous checkpoint — stages 1–3 done; stopped for user review (2026-11-07)
 
 User approved the build ("Build the Errand Agent") with engineering standards: Python 3.12, mypy --strict, ruff, Pydantic at boundaries, invariant tests first for safety-critical code, parameterized SQL, short transactions, migrations, env config, pinned deps, untrusted model/tool text, explicit error paths, real bugs logged in docs/BUGS.md with regression tests. **Ask before deviating from the design. Stop after stage 3 and show test results.**
 
