@@ -3,7 +3,7 @@
 A local, chat-based agent that arranges home-service errands: it clarifies missing details,
 compares providers, asks for approval before consequential actions, and recovers safely from tool
 failures. The errand path runs locally with mock providers; there are no real errand providers or
-payments. The language model is reached through a local ModelMux gateway (see [Language model](#language-model)). The brief is `Orange_Engineering_Assignment.pdf`; the design is
+payments. The language model is reached through a local ModelMux gateway (see [Language model](#language-model)). The brief is the company's assignment document (not included here); the design is
 [docs/DESIGN.md](docs/DESIGN.md), with decisions and the build plan in
 [docs/DECISIONS.md](docs/DECISIONS.md).
 

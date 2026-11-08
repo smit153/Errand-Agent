@@ -20,3 +20,6 @@ __pycache__/
 
 # Assistant transcript export: review before sharing (may contain personal details).
 artifacts/transcript/
+
+# The company's assignment brief: kept locally, never published.
+/Orange_Engineering_Assignment.pdf
