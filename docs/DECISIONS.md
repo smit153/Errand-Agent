@@ -1,6 +1,6 @@
-# Errand Agent — decisions v2
+# Errand Agent — design decisions
 
-**7 November 2026 · build approved; stages 1–4 implemented.** The user's Design Revision v2 (`docs/DESIGN_REVISION_v2.md`) governs this document, as amended by the user's v3 decision in §17 (ModelMux replaces Ollama). The source is `Orange_Engineering_Assignment.pdf`, which v2 calls ASSIGNMENT.md. Every PDF requirement remains binding, without reinterpretation. Sections 1–16 below are current. Appendix A preserves v1 verbatim as **superseded historical material**, not implementation instructions. Unchanged choices are explicitly carried forward.
+The full reasoning behind [DESIGN.md](DESIGN.md), the one-page design note. Code and docs cite these sections as "DECISIONS §N". The assignment PDF is the source of truth and every requirement in it is binding. Where a decision changed during the build, its section says what replaced it; §16 summarises those changes.
 
 ## 1. Keys and attempts — retained
 
@@ -282,13 +282,13 @@ This table covers PDF §§1–5, including individual failure modes and delivera
 | §5 max one-page design: state/approval/idempotency/recovery/memory/observability | DESIGN.md; §§1,5–10,13 | E45 exported page-count/manual legibility check, including final trace excerpt |
 | §5 generated eval table with all five columns | §§13,14 | E45 assertions generate expected/actual/pass-fail/notes |
 | §5 three real bugs: what/why/fix/regression | §§13,15 | E45 actual encountered bug log, linked running regression tests |
-| §5 raw end-to-end timeout-after-success trace plus annotated note excerpt | §13; DESIGN.md placeholder | E10/E45 real JSONL export and actual annotated excerpt |
+| §5 raw end-to-end timeout-after-success trace plus annotated note excerpt | §13; DESIGN.md trace excerpt | E10/E45 real JSONL export and actual annotated excerpt |
 | §5 3–5 minute full-booking demo, chat/trace side by side | §§8,13,15 | E45 recording duration/content review; live failure desirable |
 | §5 coding-assistant transcript | §§13,15 | E45 retained/exported conversation artifact |
 
-## 15. Risk-ordered build plan — approved; all 8 stages done (see PROGRESS.md)
+## 15. Risk-ordered build plan (all 8 stages done)
 
-Each numbered stage is split into reviewable tasks. Run its acceptance checks before proceeding; update PROGRESS.md and HANDOFF.md after every task. Tracing hooks and minimal journal events start with persistence/recovery even though the full exporter/eval report is stage 7. Use direct workflow/test harness calls until stage 8; no UI dependency blocks safety validation.
+Each numbered stage is split into reviewable tasks. Run its acceptance checks before proceeding. Tracing hooks and minimal journal events start with persistence/recovery even though the full exporter/eval report is stage 7. Use direct workflow/test harness calls until stage 8; no UI dependency blocks safety validation.
 
 1. **Postgres schema + Compose + test harness.** (a) Pin PostgreSQL-16/pgvector image and create local-only Compose lifecycle/health checks, test isolation and migrations. (b) Define sessions/revisions/proposals/receipts/approvals, operations/attempts/budgets, backend holds/bookings/replays, memory rows/vectors, jobs/outbox/traces and required constraints. (c) Prove transaction rollback, same-schema test setup, per-session advisory locking, claim-generation CAS and multi-session concurrency. Gate: E32/E43 skeleton and schema/constraint tests pass against real Postgres. Trade-off risk: concurrency/atomicity before agent behavior.
 2. **Exact mock tools.** (a) Implement ToolClient and all eight signatures/outputs. (b) Seed deterministic providers/history/review injection, ten-minute holds/quote drift and configurable failure branches. (c) Persist RNG progression, replay effects and first-cancel-503 phase; fake clock controls expiry. Gate: E41 plus backend parts of E08–E15; no retries/restarts reroll committed results or change contracts.
@@ -299,13 +299,13 @@ Each numbered stage is split into reviewable tasks. Run its acceptance checks be
 7. **Trace export + eval runner.** (a) Complete exact-context/native-call/guardrail/attempt/latency/usage traces and JSONL export. (b) Run ≥20 distinct simulated-user scenarios and generate all-five-column eval table plus this requirement mapping's evidence links. (c) Produce actual timeout-after-success raw trace/annotated excerpt and document three actual bugs with regression tests as encountered. Gate: E45 and full offline suite, bounded costs marked available/unavailable, no fabricated results. Retain assistant transcript throughout all stages.
 8. **FastAPI + thin CLI last.** (a) Wire local HTTP session/message/display-receipt/notification/trace endpoints to tested engine; authorization, request dedupe and server-side revision checks. (b) Thin terminal client renders code templates and live trace panes, handles disconnect/resume and async event races while input is open. (c) Clean-checkout README/setup, offline runtime check, final ≤one-page export, 3–5 minute recording and deliverable audit. Gate: E05/E06 input races through HTTP plus E42–E45 and complete requirement table. Stop if any required evidence remains missing; additional feature proposals stay gated on all PDF acceptance tests passing.
 
-The user approved this plan on 2026-11-07. PROGRESS.md records which stages are complete and their test results.
+The plan was approved on 2026-11-07; all eight stages are done.
 
-## 16. Supersession and documentation status
+## 16. Superseded decisions
 
 | Earlier decision | Current status/replacement |
 | --- | --- |
-| DESIGN.md v1 SQLite/terminal-only/Qwen3/MiniLM compact note | Superseded by current DESIGN.md; its original text is preserved below in Appendix B |
+| DESIGN.md v1 SQLite/terminal-only/Qwen3/MiniLM compact note | Superseded by the current DESIGN.md |
 | DECISIONS v1 §2 seven/eight decisions | Superseded by §2 nine/ten focused calls, with separate run and physical retry accounting |
 | DECISIONS v1 §3 all-eight-schema prompt framing | Superseded by §3 state-scoped native schema accounting; 4,096/768 budget/drop order retained |
 | DECISIONS v1 §4 qwen3:4b and JSON-schema content | Superseded by §4 Qwen 3.5 native tools; conservative repair + three retries retained |
@@ -314,16 +314,14 @@ The user approved this plan on 2026-11-07. PROGRESS.md records which stages are 
 | DECISIONS v1 §10 sentence-transformers MiniLM/PyTorch | Superseded by §10 Ollama nomic-embed-text:v1.5, vector(768) in memory row; fixture-vector eval method retained |
 | DECISIONS v1 §11 local retry scheduling | Superseded by §11 Postgres due jobs; key/attempt/restart guarantees retained |
 | DECISIONS v1 §§1,5–7 | Retained with stronger v2 guardrails and service revision binding; no weakening |
-| DESIGN.mdx / DESIGN.plan.html ModelMux visual | Historical/superseded; do not present as current. Regeneration not part of this requested two-document revision |
-| §4 Ollama Qwen 3.5 native tools as the runtime model; v2 §3; §6 "cloud LLM out of scope" | Superseded by §17 (user decision, 2026-11-07): ModelMux gateway, Claude Code or Codex. Repair + three retries, scripted offline evals and all guardrails retained |
+| §4 Ollama Qwen 3.5 native tools as the runtime model; v2 §3; §6 "cloud LLM out of scope" | Superseded by §17 (2026-11-07): ModelMux gateway, Claude Code or Codex. Repair + three retries, scripted offline evals and all guardrails retained |
 
-No application files, Compose configuration, database, model downloads or tests are created/run by this documentation task. Actual model/digest/size, latency, tokenizer counts, database concurrency correctness and embedding relevance remain implementation gates. Markdown design note is compact; exact one-page rendering is a final artifact check, not a claim inferred from word count. PDF was reread for the trace table; no `ASSIGNMENT.md` was fabricated.
 
-## 17. Design Revision v3 — ModelMux replaces Ollama (user decision, 2026-11-07)
+## 17. ModelMux replaces Ollama for the language model (2026-11-07)
 
-**Decision.** At stage 4d the user chose their own [ModelMux](https://github.com/smit153/modelmux/) gateway as the only real-model path, replacing local Ollama Qwen 3.5. Both providers are supported and selected by configuration: `claude` (`http://127.0.0.1:8101/v1`, models such as `sonnet`, `haiku`) and `codex` (`http://127.0.0.1:8102/v1`, account-specific models listed by `/v1/models`). The user was shown the alternatives (keep Ollama as default with ModelMux as a second backend, or install Ollama now) and chose replacement.
+**Decision.** During stage 4 the real-model path moved to the author's own [ModelMux](https://github.com/smit153/modelmux/) gateway, replacing local Ollama Qwen 3.5. Both providers are supported and selected by configuration: `claude` (`http://127.0.0.1:8101/v1`, models such as `sonnet`, `haiku`) and `codex` (`http://127.0.0.1:8102/v1`, account-specific models listed by `/v1/models`). Alternatives considered: keeping Ollama as the default with ModelMux as a second backend, or installing Ollama for chat as well.
 
-**PDF §1 interpretation, and its risk.** PDF §1 says the system "must run locally without real providers, payments, or external service integrations". This design reads that as: no real errand providers, payments or third-party service APIs. Those remain mocked in-process, and nothing in the errand path talks to an external service. The LLM itself is reached through a gateway running on the local machine (loopback only, digest-pinned image), but ModelMux's models run on Anthropic's or OpenAI's servers using the user's own logins. **A reviewer may read this as an external service integration.** That risk is accepted by the user and is stated in DESIGN.md and README. Offline evaluation is unaffected: every automated eval still runs against the scripted model with no network (PDF §4).
+**PDF §1 interpretation, and its risk.** PDF §1 says the system "must run locally without real providers, payments, or external service integrations". This design reads that as: no real errand providers, payments or third-party service APIs. Those remain mocked in-process, and nothing in the errand path talks to an external service. The LLM itself is reached through a gateway running on the local machine (loopback only, digest-pinned image), but ModelMux's models run on Anthropic's or OpenAI's servers using the user's own logins. **A reviewer may read this as an external service integration.** That risk is accepted, and is stated in DESIGN.md and README. Offline evaluation is unaffected: every automated eval still runs against the scripted model with no network (PDF §4).
 
 **What changes.**
 - *Adapter:* `ModelMuxChatModel` speaks OpenAI Chat Completions with `tools`. Action calls send `tool_choice: "required"` and `parallel_tool_calls: false`; ModelMux simulates tool calls and validates them before returning `tool_calls`. Code still revalidates everything (G1/G2/G7/G10 unchanged). The gateway URL must be loopback or a local service name. The gateway key comes from `ERRAND_MODELMUX_API_KEY`, is never logged, and is never committed.
@@ -334,9 +332,9 @@ No application files, Compose configuration, database, model downloads or tests 
 - *E42 measured (Codex, 2026-11-07):* two runs on `modelmux:codex:gpt-6.1-sol` each completed 3/3 PDF flows with 24/24 calls valid on the first pass, no booking without approval, per-call latency median ≈5.5 s (max 9.7 s) and 27–58 s per flow. Two runs are a smoke check, not a reliability estimate; unseeded real-model behaviour can vary. Claude is not yet measured (not logged in).
 - *Removed:* the Ollama chat adapter, which is superseded. The local-only URL check moves to the ModelMux adapter.
 
-**Resolved in §18 (user decisions at stage 5).** Previously open: (1) The *embedding backend*: v2 §5 chose Ollama `nomic-embed-text`, but ModelMux offers no embeddings endpoint. (2) *Token accounting* for the 4,096-token input cap: there is no local tokenizer for hosted Claude/Codex models, and DECISIONS §3 forbids silent chars-per-token assumptions.
+**Resolved in §18 (stage 5).** Previously open: (1) The *embedding backend*: v2 §5 chose Ollama `nomic-embed-text`, but ModelMux offers no embeddings endpoint. (2) *Token accounting* for the 4,096-token input cap: there is no local tokenizer for hosted Claude/Codex models, and DECISIONS §3 forbids silent chars-per-token assumptions.
 
-## 18. Stage-5 decisions — embedding backend and context-cap accounting (user decisions, 2026-11-07)
+## 18. Stage-5 decisions — embedding backend and context-cap accounting (2026-11-07)
 
 **Embeddings: local Ollama, embeddings only.** §10 stands as written: `nomic-embed-text:v1.5`, 768 dimensions, loopback `/api/embed` with `truncate: false`, the `search_query: ` / `search_document: ` prefixes, and the full digest and runtime version pinned once installed and verified. Ollama serves embeddings only; chat stays on ModelMux (§17). Because the embedder runs on this machine, memory retrieval adds no external dependency. Ordinary evals still use checked-in fixture vectors. The real-embedder pair check is a separate, explicitly selected integration test that fails clearly when Ollama or the model is missing and never downloads anything. The alternatives the user was shown were an in-process ONNX model, deterministic lexical vectors, and Postgres full-text search.
 
@@ -350,11 +348,11 @@ No application files, Compose configuration, database, model downloads or tests 
 | Reserve for one retry diagnostic (problem excerpt ≤ 300 bytes) | 600 |
 | **Total cap per physical request** | **4,096** |
 
-**Embedder installed and the threshold calibrated (stage 5d, 2026-11-08).** Ollama 0.40.11 (`ollama/ollama@sha256:dea72d1e…`, a 3.37 GB compressed image the user approved after being told the size) runs on loopback with `nomic-embed-text:v1.5`, installed digest `0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f` (274 MB), pinned in `ERRAND_EMBED_DIGEST`; a different build is refused and facts embedded by another build are re-embedded, never compared. Real vectors for 5 queries and 23 labeled documents are checked in (`tests/fixtures/nomic_vectors.json`). On them, every pair scores at least 0.34 (nomic has a high baseline), so the 0.30 hypothesis filtered nothing. **Minimum cosine frozen at 0.45**: it keeps 19/19 relevant facts and drops 15/20 unrelated global notes, and still keeps "Preferred area: Indiranagar" (0.623) for an Indiranagar query. The margin to the lowest relevant score (0.465) is only 0.015; other-service facts can score up to 0.558, but those are already excluded by the scope filter, and top-6 plus the 700-byte memory budget bound the rest. E43 (`-m ollama`) checks the pinned digest, dimension, prefixes and that live vectors match the fixtures (cosine above 0.999).
+**Embedder installed and the threshold calibrated (stage 5d, 2026-11-08).** Ollama 0.40.11 (`ollama/ollama@sha256:dea72d1e…`, a 3.37 GB compressed image) runs on loopback with `nomic-embed-text:v1.5`, installed digest `0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f` (274 MB), pinned in `ERRAND_EMBED_DIGEST`; a different build is refused and facts embedded by another build are re-embedded, never compared. Real vectors for 5 queries and 23 labeled documents are checked in (`tests/fixtures/nomic_vectors.json`). On them, every pair scores at least 0.34 (nomic has a high baseline), so the 0.30 hypothesis filtered nothing. **Minimum cosine frozen at 0.45**: it keeps 19/19 relevant facts and drops 15/20 unrelated global notes, and still keeps "Preferred area: Indiranagar" (0.623) for an Indiranagar query. The margin to the lowest relevant score (0.465) is only 0.015; other-service facts can score up to 0.558, but those are already excluded by the scope filter, and top-6 plus the 700-byte memory budget bound the rest. E43 (`-m ollama`) checks the pinned digest, dimension, prefixes and that live vectors match the fixtures (cosine above 0.999).
 
 **Measured gateway overhead is outside the cap and is stated, not hidden.** ModelMux adds its own CLI system prompt and tool-calling framing: in the Codex smoke test, a 251-byte phrase request was reported as 4,532 prompt tokens, and the app's own content peaked at 1,922 bytes. The provider-reported `prompt_tokens` stays in every model-call trace. The cap claims only what the app controls. The 768 output cap remains unenforceable through ModelMux (§17).
 
-The alternatives the user was shown were a proxy tokenizer (tiktoken o200k) and enforcement from provider-reported tokens after the call.
+Alternatives considered: a proxy tokenizer (tiktoken o200k), and enforcement from provider-reported tokens after the call.
 
 **Implementation notes (stage 5a/5b, within §§7, 10).** Stored fields are typed: preferred area, earliest acceptable time (global or per service), preferred provider per service, and short notes in the user's own words. Inspect, confirm, correct and forget are deterministic commands handled by code, like `yes` / `confirm <token>`: they touch only the caller's own memory and never reach the model. Explicit "remember …" is extracted by the model but accepted only when the user's message contains explicit memory wording (and a note only verbatim), so neither the model nor review text can write memory. Saved preferences are applied as visible defaults recomputed each turn rather than copied into the request, so there is no derived state to invalidate on correct/forget. A saved provider never bypasses a filter; it only orders first among eligible options. Inference rules: the last 3 completed, approved bookings of a service with one provider → provider candidate; the last 3 overall all starting ≥ 09:00 → earliest-time candidate; candidates for a forgotten field+scope are never re-created.
 
@@ -366,182 +364,3 @@ The alternatives the user was shown were a proxy tokenizer (tiktoken o200k) and 
 - **Notifications** are at-least-once with stable IDs (`event_key` per operation+status or per event); only the owner can acknowledge. Clients de-duplicate by ID.
 - **Known limit (holds):** the fixed tools have no way to release a hold, so after a genuine change our own earlier hold can hide that slot from the next search until it expires (10 minutes). Restating a value the card was built from is not a change (BUG-010).
 - **Known limit:** a crash after a replacement hold but before the card can leave one extra hold, which expires by itself in 10 minutes and never becomes a booking.
-
-## Appendix A — v1 decisions (superseded historical record)
-
-<details>
-<summary>Original v1 log; current sections above take precedence</summary>
-
-# Design review decisions
-
-7 November 2026. These are adopted design decisions and planned acceptance checks, not implemented behavior. Numbers below are explicit design assumptions or counts of the proposed workflow, not measurements of an application. The assignment's eight tool signatures and failure behaviors remain unchanged.
-
-## 1. Operation keys versus dispatch attempts
-
-| Option | Advantages | Costs and failure modes |
-| --- | --- | --- |
-| New idempotency key on every dispatch | Simple attempt accounting; independently retryable calls | Unsafe: a timeout after success followed by a new key can duplicate the booking. Reject. |
-| One key for the whole conversation or booking lifecycle | Easy deduplication | Conflates booking, cancellation, reschedule, and revised proposals; can replay the wrong result or prevent legitimate later work. Reject. |
-| Stable operation key plus separate attempt IDs | Deduplicates one exact approved action while retaining every transport attempt; supports restart recovery | Requires a durable operation journal and explicit terminal/nonterminal outcomes. Adopt. |
-
-An operation is an immutable action snapshot linked to one approved proposal revision. Generate and persist its opaque key once with approval consumption, before dispatch. Each invocation gets an attempt ID and ordinal. A unique proposal-to-operation constraint makes repeated confirmation return the existing outcome. Never derive a key solely from provider/slot: a legitimate later action may share those fields.
-
-Retrying the same intent after a transient failure uses the same key. A different hold, price, slot, provider, or action requires a new proposal, fresh approval, and new operation/key. Resolve any old ambiguous operation before starting a replacement that could duplicate its effect. Terminal `slot_taken`/`hold_expired` results do not become success by rotating keys. The mock backend persists committed effects and replayable success together; a known no-effect transient failure does not permanently cache the operation as failed. Failure sampling is configurable per dispatch, while committed outcomes replay without resampling.
-
-Planned checks: repeated confirmation; crash before/after provider commit; timeout without success then same-key retry; changed proposal; terminal failure replay; no duplicate effect across attempts.
-
-## 2. Counted model-call budget
-
-Use one structured model decision at each row; deterministic application transitions and fixed outcome messages require no model call. No hidden summarization or memory-extraction calls are allowed.
-
-| Step | Model decision | Following work |
-| --- | --- | --- |
-| 1 | Parse initial incomplete request and ask only for missing fields | Wait for user; run ends |
-| 2 | Merge reply and propose search | `search_providers` |
-| 3 | Compare candidates and request selected provider details | `get_provider` |
-| 4 | Assess details/reviews and propose a slot hold | `hold_slot` |
-| 5 | Read actual held quote and propose exact approval presentation | Code renders immutable proposal; wait for user; run ends |
-| 6 | After code validates confirmation, propose booking | Code rechecks approval; `book` |
-| 7 | Interpret booking result and request authoritative status | `get_booking_status`; code renders verified outcome |
-
-Total: **7 logical decisions, 5 tools**, for one clarification and one selected candidate. A fully specified initial request skips step 1: **6**. “Same provider as last time” adds one model decision and `list_bookings`: **8 decisions, 6 tools**. A timeout-without-success followed by one retry adds another `book` and status lookup, both prescribed by code: no extra model call. More candidate inspections or user corrections increase these counts; they are not assumed free.
-
-The previous six-model-call cap does not cover this seven/eight-decision conversation if interpreted end-to-end. Its original per-run definition does cover the ordinary middle segment (steps 2–5: four); this distinction was missing. A run starts on user/event/resume input and ends at a user wait, terminal result, or safe checkpoint. User waiting consumes no execution time. A new run cannot reset operation retry limits.
-
-Adopt **10 logical decisions, 40 physical inference calls, 20 tool invocations, and 300 seconds active time per run**. Each logical decision permits initial generation plus three retries, so 10 × 4 = 40; local syntax repair uses zero inference calls. The counted seven/eight-decision flow would use at most 28/32 physical calls if every decision succeeds only on the fourth generation. These bounds fit the counted work; they do not promise CPU speed. Deadline can terminate earlier. Use at most 60 seconds per model call, bounded by remaining time, including cold loading. Both model and tool dispatch reserve a durable counter before starting; failures consume it.
-
-For one consequential operation, persist a lifetime allowance of **3 side-effect dispatches, 6 reconciliation calls, 40 model calls, and 300 seconds charged active time**, shared across restarts; run caps also apply. Record dispatch deadline before a call; after crash charge its outstanding reservation conservatively. Recovery stops safely when exhausted. Read-only inspection remains possible; retry budget does not silently reset on restart or repeated confirmation. Explain pending versus known failure. A materially revised operation needs a resolved predecessor and fresh approval.
-
-Planned checks assert the exact ordinary/history sequence and counters, invalid-output worst case, repeated clarification across runs, and exhaustion on either run or operation cap. No benchmark has been run.
-
-## 3. Context allocation and drop order
-
-Assume short English requests, 3–8 compact candidates, at most six relevant short preferences, and a compact typed action schema. Adopt **4,096 input tokens**, **768 output tokens**, local runtime context **8,192**. Input allocations are engineering estimates to validate with the pinned tokenizer during implementation.
-
-| Component | Input tokens |
-| --- | ---: |
-| System policy, trust, approval and recovery rules | 600 |
-| Eight tool signatures and structured action schema | 850 |
-| Current request, proposal revision, operation and approval facts | 550 |
-| Current user message | 350 |
-| Current structured tool results/candidates | 700 |
-| Eligible relevant memories | 350 |
-| Quoted untrusted review excerpts | 150 |
-| Retry diagnostics and previous invalid output excerpt | 300 |
-| Chat template, delimiters, and accounting reserve | 246 |
-| **Total** | **4,096** |
-
-This is a maximum allocation, not an instruction to pad requests. Count actual tokens over the final rendered template, including schema and repair instructions, before every original/retry call. Verify tokenizer/template agreement with runtime prompt usage; never rely on characters-per-token or silent runtime truncation. Pin tokenizer, model digest, and template. The unused context capacity is safety space, not permission to exceed the input cap.
-
-Drop in order: (1) review excerpts, (2) lowest-ranked optional memories, (3) excess unselected candidate descriptions and old nonessential tool details, (4) shrink retry excerpts to a bounded diagnostic. Preserve current candidate IDs/material facts required for the decision. Never drop policy, schema, current user intent, active proposal, price, expiry, approval revision, or unresolved operation status. If essentials still exceed the cap, dispatch no model call; explain that the request is too long and ask for a shorter input. Do not truncate the user's correction silently. No raw conversation, obsolete fact, forgotten fact, or unconfirmed inference is a budget candidate at all.
-
-Planned checks: 50+ seeded memories and long history; exact context exclusions; each drop stage; oversized essential input; retry prompt stays within cap.
-
-## 4. Local inference and invalid JSON
-
-Adopt Ollama on loopback with local `qwen3:4b`, initially a modest quantized candidate rather than a quality/speed guarantee. Pin downloaded model digest and runtime version before evaluation; no cloud fallback. Download dependencies/weights once during setup, then demonstrate disconnected runtime. The published [Qwen3 tags](https://registry.ollama.com/library/qwen3/tags) list a roughly 2.5 GB 4B artifact; runtime memory and latency need a real smoke test. ModelMux remains separately documented infrastructure, not the assignment model path.
-
-Request a JSON schema, disable thinking where the pinned model supports it, and validate syntax, schema, allowed actions, arguments, state and authorization in code. Ollama documents schema output and application validation in its [structured-output guide](https://docs.ollama.com/capabilities/structured-outputs), and the [chat API](https://docs.ollama.com/api/chat) exposes usage counts. Structured output reduces malformed replies; it does not confer approval or guarantee valid actions.
-
-On invalid JSON: first perform conservative local syntax repair (strip one enclosing code fence or surrounding whitespace; never invent values, approvals, or fill truncated content). Revalidate. If still invalid, make up to **3 additional model generations**, each with bounded validation diagnostics; locally repair and validate each response. This means at most **4 inference calls per logical decision**, not three total and not an extra hidden repair-model call. Semantic/schema failures use the same bounded retry path but cannot be fixed by inventing facts. Global limits may stop retries earlier. Never execute output until all gates pass.
-
-Trace original generation, each syntax-repair attempt, validation failures, retry ordinal, sanitized input/output, latency and token usage. Do not log hidden reasoning. Final message: “I couldn't produce a valid action after three retries. No new action was executed from that response. Please try again or simplify the request.” If there is already an unresolved operation, append its truthful pending status instead of suggesting it failed. Deadline/limit exits state that actual reason and attempt count.
-
-Planned checks: local repair succeeds; third retry succeeds; all fail; semantic invalidity; injected approval; truncated output; deadline interrupts retry; every attempt traced. Scripted model drives offline evaluations.
-
-## 5. Expired holds and changed prices
-
-Revalidate current hold and material facts immediately before consuming approval/dispatch. The in-process mock backend also checks hold expiry atomically when booking; code cannot eliminate that race with an earlier check alone. Never silently transfer approval to a replacement hold or price.
-
-Expired: “The hold for Tuesday at 10 a.m. expired, so I haven't booked it. I'll check availability again. Any new hold will need your approval.” Show a new exact proposal only after obtaining a valid hold.
-
-Price change: “The quote changed from ₹1,200 to ₹1,350. Your earlier approval no longer applies. Would you like to book this slot for ₹1,350? Reply yes or confirm <new token>.” If over budget, ask whether to change the budget or search alternatives before offering an actionable proposal. A hold quote different from search price is displayed before the first approval; it is not treated as approval of the search estimate. A timeout stays in reconciliation, not this known-no-booking path.
-
-Planned checks cover expiry before approval and during dispatch, price change before/after approval, over-budget quote, and no side effect under stale approval.
-
-## 6. Explicit token and plain yes
-
-Accept a normalized standalone `yes` (case/outer whitespace ignored) and `confirm <token>` from authenticated user chat input only. Other phrasings may clarify, but cannot authorize by model interpretation. Each inbound message carries the revision of the latest proposal actually displayed in that session when input began; persist that association. A terminal implementation records it at prompt display, not after asynchronous events arrive.
-
-Both forms must target the current displayed revision, unchanged request revision and material snapshot, valid expiry, correct user/session, and pending status. Only one actionable proposal may be displayed at once. If facts change while a user types, reject the response, explain the change, display a new revision, and obtain a new response; never bind the old yes to an unseen replacement. Code handles confirmations before model input. Tokens do not bypass stale-revision checks. A duplicate confirmation for an already consumed unchanged proposal returns its existing operation outcome; it never dispatches a second operation.
-
-Planned tests for **each form**: valid booking/cancel/reschedule; stale price/provider/slot/hold; expired proposal; duplicate/restart replay; correction in flight. Additional plain-yes tests: no proposal, multiple notifications, cross-session input, and a new revision arriving while typing. A model-generated yes or a yes embedded in a review is rejected. No tests written yet, per design-only scope.
-
-## 7. Who creates inferred memories?
-
-| Approach | Advantages | Costs and injection risk |
-| --- | --- | --- |
-| Model infers from conversation | Handles paraphrases and nuanced preferences; broader coverage | Can turn quoted instructions or malicious reviews into persistent “user preferences”; opaque rationale, extra inference, drift, hard replay. Filtering prompts alone cannot prevent memory poisoning. |
-| Code infers from structured user choices | Auditable triggers, no extra model call, reproducible tests, provenance can exclude provider text | Narrower coverage; thresholds are heuristic; repeated situational choices can be mistaken for stable preference. |
-| Hybrid candidate generation with code validation | Flexible model suggestions with typed records and provenance checks | More components; source validation still cannot prove a plausible inference is true; requires user confirmation regardless. |
-
-Adopt **code-generated candidates** for this assignment: for example, three explicit morning selections in distinct completed errands produce an unconfirmed candidate, not an active preference. Count only user selections tied to durable outcomes; do not count auto-ranked suggestions, duplicate retries, provider text, or model assertions. An inference cannot establish permissions, approval, payment behavior, or tool policy. The model can extract an explicit statement from the current user message into a typed candidate, but code verifies source and asks confirmation if ambiguous.
-
-Store source event IDs, scope, confidence/reason, explicit/inferred origin, confirmation, revision and tombstone. Show unconfirmed candidates only in a separate deterministic memory-management view; they never reach model context, retrieval query, or summaries. Ask separately whether to remember one; booking yes is not memory confirmation. Once user-confirmed, retain inferred origin plus confirmation metadata. Forgotten facts and their embeddings/derived summaries are removed from active retrieval; traces are audit data and never retrieval sources. This trades recall for a small, defensible injection surface.
-
-## 8. Is another agent worth it?
-
-A separate cancellation agent could isolate a queue and specialize replacement search, and might help at large volume. It would also need its own model budget, duplicate-event handling, access to preference changes, and coordination over proposal revision, approval, and operation ownership. An additional model cannot replace those application invariants. For one local user and eight fixed tools, the added coordination and debugging paths outweigh specialization.
-
-Adopt **one LLM agent plus a deterministic background watcher**. The watcher consumes durable simulated cancellation events, updates booking state, invalidates affected proposals and queues a notification/replacement task through the same workflow. It does not create approval or automatically rebook. Notification deduplication uses a unique event/user outbox key; an inbox item survives restart and supports at-least-once delivery with stable IDs, rather than claiming exactly-once terminal display. No-match results explain the limiting preference instead of relaxing it. A second LLM agent can be reconsidered only if measured workload or independent expertise justifies it.
-
-## 9. Locking and concurrency
-
-| Strategy | Advantages | Costs |
-| --- | --- | --- |
-| In-memory session mutex only | Simple and fast | Does not protect across processes/restarts; insufficient alone. |
-| Database transaction held across all work | Easy apparent serialization | Blocks watcher/UI while inference runs, causes lock timeouts, still cannot make an external side effect transactional. Reject. |
-| Short SQLite transactions plus optimistic revision checks and durable claims | Restart-safe, protects invariants, leaves reads responsive | Must handle busy errors, stale results and claim recovery explicitly. Adopt. |
-
-For the local assignment, run one operation worker under an OS advisory lock for this database; watcher and chat submit work to it. The lock is released on process death; a second worker fails clearly instead of racing. Use SQLite WAL and bounded busy timeout (2 seconds, also bounded by run deadline). `BEGIN IMMEDIATE` covers approval validation/consumption, unique operation insertion and dispatch reservation; commit before any tool/model call. Revision compare-and-swap rejects stale results when the watcher changes the request during inference. Unique constraints protect proposal consumption, operation keys and cancellation-event ingestion. Mock side effects and their replay record commit together in a short backend transaction.
-
-After crash, obtain the worker lock, inspect persisted in-flight work and reconcile before dispatch; never steal a timed lease while its old worker might still act. This intentionally favors a simple singleton over distributed leases/fencing. The cost is no multi-worker throughput, acceptable for this assignment. Never hold a session mutex while waiting for user input. Planned race tests interleave confirmation, cancellation, price change and duplicate dispatch; separately test two worker processes and crash release.
-
-## 10. Local embeddings and reproducible ranking
-
-Adopt **sentence-transformers/all-MiniLM-L6-v2** running locally on CPU. Its [model card](https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2) describes 384-dimensional embeddings and truncation beyond 256 word pieces. It is a compact English retrieval baseline; English evaluation is an assumption, and multilingual requests need explicit later evaluation rather than a claimed capability.
-
-Download weights/tokenizer during setup; pin immutable repository revision, artifact hashes, sentence-transformers/PyTorch versions, and preprocessing in an embedding manifest before implementation acceptance. No invented pin is claimed here. Use evaluation mode, CPU, one thread, deterministic algorithms, fixed normalization, and no dropout. Reject or explicitly segment long facts before encoding; prefer one short typed preference per record. Query derives only from current structured user intent; never include raw reviews or excluded memories.
-
-Filter by user, scope, current revision, not forgotten, confirmed, and applicable preference field **before ranking**. Then compute normalized vectors, cosine similarity, sort by score rounded to six decimals descending and stable memory ID ascending. Include at most six applicable memories within 350 tokens; selected threshold initially 0.30 is a tunable hypothesis to freeze after labeled relevance fixtures. Required current constraints live in state, not probabilistic retrieval. Similarity is not a trust check; test exclusion of confirmed but irrelevant memories too.
-
-Offline evaluations use checked-in fixture query/memory vectors produced by that pinned local model, with input hashes and model manifest; real ranking/filtering/budget code still runs. A separate network-disabled local integration check encodes fixtures, checks numerical tolerance and expected ordering, and fails clearly if pinned artifacts are absent; no remote auto-download. CPU libraries can differ slightly across platforms, so do not promise cross-platform bitwise floats: fixed fixture vectors guarantee deterministic scenario ranks, while the pinned environment and margin-separated fixtures validate real encoder behavior. Test near ties explicitly with the stable tie rule. Corrections/forgetting invalidate stored vectors and ranking caches atomically; a stale fixture hash is an error.
-
-## 11. Durable cancellation 503 retries
-
-Persist operation key, booking ID, approval snapshot, state, dispatch reservations, attempt ordinals, retry count, last sanitized error, next_retry_at, and lifetime budgets. Mock backend keeps the per-operation first-503 state durably under the same key; it must not reset that behavior on process restart. The required behavior is first call 503 with no effect, next dispatch succeeds. Transient 503 is an attempt result, not the operation's terminal replay result.
-
-State sequence: `approved → executing(attempt 1) → retry_wait(503, due +1s) → executing(attempt 2, same key) → succeeded`. If additional configured transient faults exist, permit a third dispatch after 2 seconds, then stop with a known failure or pending ambiguity as appropriate. Three total dispatches is a lifetime maximum, not three on every restart. No jitter in the assignment; use a fake clock for tests. Waiting is checkpointed, not a blocking sleep holding locks. A resume run has its own cap and the existing operation's remaining allowance.
-
-On restart, resume a durable due retry, or leave it queued until due. If the crash happened after the backend recorded 503 but before the client recorded it, the backend's durable attempt state still makes the next same-key call succeed. If cancellation might already have succeeded, use `list_bookings(user_id)` to inspect that booking (the fixed status tool is for booking holds/keys), then replay the same cancellation key if necessary within budget; successful replay must not cancel twice. Authoritative cancelled state can also come from provider cancellation: report the observed state without falsely attributing it to this call. If status is unavailable and retry budget is exhausted, say cancellation is pending verification.
-
-Planned restart tests: before/after first 503, before due time, after retry success but before client persistence, exhausted attempts, backend restart, and cancelled-by-provider race. Assert same key, persistent 503 state, bounded attempts and truthful outcome.
-
-## Evidence and document status
-
-DESIGN.md is the compact design note; this log contains the full review reasoning. The earlier DESIGN.mdx/HTML ModelMux visual is superseded and must be regenerated before presentation as current design. No app code, tests, model installation, provider login or live inference was performed for this review. The actual trace excerpt and evaluation table remain implementation deliverables.
-
-</details>
-
-## Appendix B — v1 design note (superseded historical record)
-
-<details>
-<summary>Original compact design; do not implement from this archive</summary>
-
-# Errand Agent — design
-
-**Design only · reviewed 7 November 2026.** The PDF is authoritative; preserve all eight mock tool contracts. Detailed trade-offs, budgets, and planned checks are in [DECISIONS.md](DECISIONS.md). No implementation or passing evaluations are claimed.
-
-**Architecture.** One Python conversational agent, terminal chat, SQLite, in-process mocks, and local Ollama `qwen3:4b` inference. Download and pin model artifacts during setup; runtime and scripted evaluations require no external services. ModelMux setup remains separate infrastructure and is not required by this assignment. A deterministic watcher detects provider cancellations and invokes the same workflow; another LLM agent adds coordination cost without a distinct required capability.
-
-**State and approval.** Persist `collecting → comparing → held → awaiting_approval → executing → verifying → completed`, with conflict, retry, and pending-recovery branches. Corrections retain unrelated fields. Show an immutable proposal revision containing action, provider, slot, price, target hold/booking, and expiry. Application code accepts `confirm <token>` or a standalone `yes` bound to the latest actually displayed revision. Atomically reject changed/stale facts, consume approval, and claim the operation. Expired holds and changed prices get a specific explanation and a fresh proposal requiring fresh approval. Model/tool text cannot authorize actions.
-
-**Keys, locking, recovery.** One durable idempotency key per approved immutable operation; distinct attempt IDs per dispatch. Transient retries reuse the key; materially changed, newly approved actions receive a new operation/key only after the old outcome is resolved. SQLite WAL, short `BEGIN IMMEDIATE` transactions, revision checks, unique constraints, and a singleton worker lock serialize claims; never hold a transaction during inference/tool work. After crash or booking timeout, reconcile by key before retrying or claiming success. Persist the mock backend's effects and idempotency records atomically. A cancellation 503 is a nonterminal attempt: persist attempt count and next retry time, then retry the same key after restart. Bound recovery across restarts; ambiguous outcomes stay pending.
-
-**Limits and output.** The explicit complete booking path uses seven model decisions (eight with booking-history lookup), spanning approval-separated runs. Allow ten logical decisions and forty physical model calls per run, twenty tool calls, and 300 seconds active time; also cap an operation across restarts. For invalid JSON, first attempt a conservative local syntax repair, then make up to three model retries; validate schema and semantics each time, trace every attempt, and fail visibly without executing invalid output. Reserve 4,096 input tokens plus 768 output tokens inside an 8,192-token local context. Tokenize the complete rendered prompt; drop optional reviews, low-ranked memories, then extra candidate detail. Never remove safety rules or current action facts to fit.
-
-**Memory and trust.** Code creates inspectable, unconfirmed inferred preferences from auditable structured user choices; the model may parse explicit user statements but cannot promote inferences. Confirmation is separate from booking approval. Only current, confirmed, relevant facts survive provenance/scope filters, then local `all-MiniLM-L6-v2` embeddings rank them. Forget/correct invalidates vectors and derived state. Pin embedding artifacts and CPU dependencies; offline tests use recorded vectors plus a local embedding integration check. Untrusted reviews never become instructions, memories, or permissions. No raw conversation replay.
-
-**Proactive behavior and evidence.** A durable cancellation inbox/outbox deduplicates events, notifies affected users, searches within current preferences, and requires fresh approval for replacements. Trace states, IDs, exact model context, each model/repair/tool attempt, sanitized results, latency, usage, and unavailable costs explicitly. Plan at least twenty offline scenarios asserting outcomes and invariants, including both approval forms, races, retries/restarts, injection, memory exclusion, and limits. Deliver generated eval results, three real bugs with regression tests, transcript, README, and a 3–5 minute demo. **Trace excerpt pending implementation:** the required real timeout-after-success trace will show persisted key → book timeout → authoritative status confirms booking → success; this description is not execution evidence.
-
-</details>
