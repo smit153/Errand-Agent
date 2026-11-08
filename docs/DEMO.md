@@ -71,7 +71,7 @@ context management).
    | --- | --- | --- |
    | **TRACE** (top right) | `clear; python3 -m errand_agent.cli trace --follow --new-only` | Leave it. It starts empty and prints each new event as it happens. |
    | **CHAT** (top left) | `clear; python3 -m errand_agent.cli chat` | Note the conversation number it prints, e.g. `(new conversation #7)`. |
-   | **CONTROLS** (bottom) | `clear` | Leave it at the prompt. You paste demo commands here during the take. |
+   | **CONTROLS** (bottom) | `clear` | Leave it at the prompt. You paste demo commands here during the take. Their answer prints **here, in CONTROLS**, not in TRACE (see below). |
 
 Start TRACE **before** CHAT, so the trace shows the conversation from its first event. Fonts:
 14–16 pt in CHAT; one step smaller in TRACE (`Ctrl+-` with that pane focused) because its lines
@@ -167,6 +167,20 @@ Every line in TRACE has the same shape: **time · conversation · label · what 
 | `BOOKING` | green | The booking operation: idempotency key, sending, verification, final result. |
 | `EVENT` | bold magenta | Something from the outside world: a provider cancelled. |
 | red line | bold red | An error, a rejection or a limit. Red is where the interesting part usually is. |
+
+**CONTROLS commands don't appear in TRACE themselves.** TRACE records what the *agent* does.
+A CONTROLS command only changes the fake provider, so its answer prints in CONTROLS, and TRACE
+shows something only when the agent next acts:
+
+| CONTROLS command | Prints in CONTROLS | What TRACE shows |
+| --- | --- | --- |
+| `demo next-booking timeout_booked` (or `success`) | `{"next_booking": "timeout_booked"}` | Nothing yet. The effect shows when you type `yes` in CHAT: the book call times out (or succeeds). |
+| `demo provider-cancel BK-…` | `{"cancelled_by_provider": "BK-…", "events": [...]}` | After 1–2 seconds, a new block for a new conversation (`#8`): `list_bookings`, `search_providers`, `hold_slot`, `EVENT provider cancelled …`. |
+| `demo bookings` | the list of bookings | Nothing (it only reads). |
+| `trace --session 7 --raw \| grep …` | the injected review text | Nothing (it only reads the trace). |
+
+If CONTROLS prints `error: no such booking`, the booking ID is wrong, or nothing has been booked
+yet. Run `python3 -m errand_agent.cli demo bookings` and use the `BK-0…` ID it lists.
 
 Three phrases explain almost everything on screen:
 
@@ -314,6 +328,9 @@ The AI never books anything by itself. If you get lost mid-take, come back to th
 ### Scene 5 · 2:25–3:20 · The booking times out after it actually worked
 
 1. **DO (CONTROLS):** paste `python3 -m errand_agent.cli demo next-booking timeout_booked`
+
+   **NOTE (don't say):** CONTROLS prints `{"next_booking": "timeout_booked"}`. TRACE stays quiet:
+   this only sets up the fake provider. The timeout appears in TRACE after you type `yes`.
 2. **SAY:**
    > "Now the trickiest case: the provider accepts the booking but never replies. Like a frozen
    > payment page: did it go through?"
@@ -355,7 +372,11 @@ The AI never books anything by itself. If you get lost mid-take, come back to th
 
 1. **DO (CONTROLS):** paste `python3 -m errand_agent.cli demo provider-cancel BK-000002`
 
-   **NOTE (don't say):** if CHAT showed a different booking ID, use that one.
+   **NOTE (don't say):** use the booking ID from Scene 5's "Booked and verified … Booking ID BK-…"
+   line. CONTROLS prints `{"cancelled_by_provider": "BK-000002", …}`. TRACE shows nothing for
+   1–2 seconds, until the background worker picks it up; then a new `#8` block appears. If
+   CONTROLS says `error: no such booking`, run `python3 -m errand_agent.cli demo bookings` and use
+   the `BK-0…` ID listed there.
 2. **SAY:**
    > "Now the plumber cancels on their side. Watch: I won't type anything."
 3. **POINT (CHAT):** the `--- notification (conversation #8) ---` block, when it appears (about 2 s). **SAY:**
@@ -374,7 +395,8 @@ The AI never books anything by itself. If you get lost mid-take, come back to th
    > "But it won't book without asking me."
 8. **DO (CONTROLS):** paste `python3 -m errand_agent.cli demo next-booking success`
 
-   **NOTE (don't say):** without this, the simulation picks a random outcome (70% success, 15%
+   **NOTE (don't say):** CONTROLS prints `{"next_booking": "success"}`; TRACE stays quiet until
+   your `yes`. Without this, the simulation picks a random outcome (70% success, 15%
    slot taken, 15% timeout), so a "slot taken" could waste time. You don't need to mention it.
 9. **DO (CHAT):** paste `yes`. CHAT prints `(switching to conversation #8 …)`, then `Booked and verified`.
 10. *(optional)* **SAY:**
@@ -421,6 +443,8 @@ The AI never books anything by itself. If you get lost mid-take, come back to th
 | The card's hold expired (more than 10 minutes) | `yes` is refused and availability re-checked: it's a feature (S17). Approve the new card. |
 | A model call is slow or a red `REJECTED` line appears | That's the app refusing a bad proposal; the model retries. Narrate it: "the model proposes, the code decides." Each run is capped (see the `RUN` lines). |
 | CHAT shows `(error: …)` | The client already retried with the same message ID; paste the message again. |
+| Nothing appears in TRACE after a CONTROLS command | Normal for `next-booking`, `bookings` and the review `grep`: they don't involve the agent. After `provider-cancel`, wait 2 seconds. If still nothing, check that the SERVER tab is still running (it runs the background worker) and that CONTROLS didn't print an error. |
+| CONTROLS prints `error: no such booking` | Wrong ID, or nothing is booked yet. Run `python3 -m errand_agent.cli demo bookings` and use the `BK-0…` ID. |
 | You want to show resuming | In CHAT: `/quit`, then `python3 -m errand_agent.cli chat --session 7`: the card is shown again with a fresh receipt. |
 | The first request shows a card instead of "couldn't find" | It's no longer Sunday afternoon in India time. Carry on with "Recording on another day" below. |
 
