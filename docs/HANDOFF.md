@@ -2,7 +2,7 @@
 
 ## Current checkpoint — all 8 stages done (2026-11-08)
 
-Update: the user asked how to showcase every PDF requirement and for a demo script. Rehearsing the demo live with Codex found BUG-011 (date correction flipped intent to reschedule; fixed, S38). docs/DEMO.md is now the timed recording script with a requirement map, built from that rehearsal; the trace pane shows per-call context. Recording-day caveat: "this week, mornings only" has no slots late on a Sunday (correct per DECISIONS §8); the script covers it.
+Update: the user asked how to showcase every PDF requirement and for a demo script. Rehearsing the demo live with Codex found BUG-011 (date correction flipped intent to reschedule; fixed, S38). docs/DEMO.md is now the timed recording script with a requirement map, built from that rehearsal; the trace pane shows per-call context. The user will record on a Sunday afternoon; DEMO.md's main path is the Sunday-afternoon flow (no slots this week → "make it next week" → card), valid 12:00–24:00 IST Sunday; other days have their own short section.
 
 The user asked to continue through stages 7 and 8 without waiting. All 8 stages are done; 413 offline tests + 2 live Ollama tests pass; the generated eval table has 37/37 scenarios. Stage 8: local HTTP API (`errand_agent/api/`), stdlib-only CLI (`errand_agent/cli.py`), `errand_agent/serve.py` + `scripts/serve.sh`, shared `scripts/with_model.sh`, `docs/DEMO.md`, transcript exporter. A live run with Codex through the CLI found BUG-010 (restated default discarded the card) and the reconnect/receipt gap (fixed with `GET /sessions/{id}/card`). 10 bugs logged; three highlighted.
 

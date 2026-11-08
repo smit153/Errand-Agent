@@ -31,10 +31,15 @@ card takes about 30 s: talk over it.
 
    The trace pane first prints the seeded history; press `Ctrl+L` once it settles so only live
    lines show.
-3. **Check the day.** "This week, mornings only" means today through Sunday, mornings 9–12
-   (DECISIONS §8). On a Friday afternoon or at the weekend there may be no morning slot left. The
-   script is written so this doesn't matter (step 2 moves the request to next week either way),
-   but know which branch you'll get.
+3. **This script is written for a Sunday afternoon** (it was rehearsed on Sunday 8 Nov at about
+   1 PM). The app keeps time in India (Asia/Kolkata). "This week" means today through Sunday and
+   "mornings" means 9–12 (DECISIONS §8), so on a Sunday afternoon the first request finds nothing.
+   That's deliberate: it shows the agent refusing to loosen your constraints, then a one-word
+   correction keeping everything else. Record **between 12:00 noon and midnight IST on Sunday**:
+   - Before noon, a slot might still exist today.
+   - After midnight IST it's Monday in the app, and the first request goes straight to a card.
+
+   If you're on another day, see "Recording on another day" at the end.
 4. Rehearse once, then restart the server with `--fresh` before the real take.
 5. A hold lasts 10 minutes: approve within 10 minutes of the card appearing.
 
@@ -50,41 +55,46 @@ approval, and verifies every booking. Left: the chat. Right: the live trace, whi
 every state transition, model call, and tool call. Bottom: demo controls that steer the mock
 provider, not the agent."
 
-### 0:20–1:00 The request: only missing details, saved preferences
+### 0:20–0:50 The request: only missing details, saved preferences, no silent loosening
 
 **Type:** `Find a plumber for my kitchen tap this week, mornings only, under ₹1,500.`
 
-**Say:** "That's the first example request from the brief, word for word. It never asks for my
-area: it comes from my saved preferences, and the agent says so openly. I can override it."
+**Expect** (about 15 s; exact text from the Sunday rehearsal):
+
+```
+Using your saved preferences: #1 Preferred area: Indiranagar; #3 Preferred plumber provider: Lokesh Plumbing (PLU-IND-03). Tell me a different one to override it for this request.
+I couldn't find an option that fits all your constraints (2 over your budget; 6 with no slot in your time window). I haven't loosened anything: tell me if you'd like to change the budget, day or time.
+```
+
+**Say:** "That's the first example request from the brief, word for word. It never asked for my
+area: it came from my saved preferences, and the agent says so openly. It's Sunday afternoon,
+so 'this week, mornings only' leaves nothing. It searched, found nothing that fits, and told me
+why. It didn't quietly raise my budget or widen the time window."
 
 **Point at:**
-- `extract #1 accepted update_request`: the model only *extracts* the user's phrases; code turns
-  "this week" and "under ₹1,500" into dates and a number.
+- `extract #1 accepted update_request`: the model only *extracts* the user's phrases. Code turns
+  "this week", "mornings only" and "under ₹1,500" into dates, hours and a number.
 - `memory.retrieved` and the `memories #…` list on the model-call line: only relevant, current
   preferences go to the model, within a 4,096-byte cap.
+- `← search_providers …`: the search ran; code filtered out everything.
 
-**Expect one of two outcomes:**
-- **Early in the week:** a ranked list and a confirmation card.
-- **Late in the week:** "I couldn't find an option that fits all your constraints (2 over your
-  budget; 6 with no slot in your time window). I haven't loosened anything." **Say:** "It
-  doesn't quietly relax my budget or time window."
-
-### 1:00–1:40 A correction keeps everything else
+### 0:50–1:40 A correction keeps everything else
 
 **Type:** `Actually, make it next week.`
 
-**Say:** "One detail changed: the date. Service, area, mornings and budget all stay."
+**Say (during the ~35 s wait):** "I changed one detail: the date. Service, area, mornings and
+budget all stay, and nothing is re-asked."
 
 **Point at:**
-- `agent.request_updated {"changed":["date"]…`.
-- If you rehearsed with this model, you may also see `extract #1 REJECTED: intent is not stated
-  in the user's message` followed by `extract #2 accepted`. **Say:** "In rehearsal the model read
+- `agent.request_updated {"changed":["date"]…`: only the date changed.
+- You may also see `extract #1 REJECTED: update_request: intent is not stated in the user's
+  message`, then `extract #2 accepted` (it happened in the rehearsal). **Say:** "The model read
   'make it' as 'move my booking'. Code rejected that because I never asked to reschedule, and the
-  model corrected itself. That was BUG-011, found while preparing this demo."
-- If a card was already showing: the chat says the old card **no longer applies**. **Say:** "Any
-  change to provider, slot or price invalidates the earlier approval."
+  model corrected itself. That was a real bug, BUG-011, found while rehearsing this demo." If it
+  doesn't happen, skip this line.
+- `collecting → comparing → held → awaiting_approval`: the workflow states, step by step.
 
-**Expect the card** (rehearsal values):
+**Expect the card** (Sunday 8 Nov rehearsal; on a later Sunday the dates move with it):
 
 ```
 1. Lokesh Plumbing (PLU-IND-03) — Mon 9 Nov, 11:00 AM — ₹550 — ★4.4
@@ -213,15 +223,16 @@ Show `artifacts/eval/eval_table.md` for two seconds if you have time.
 | A model call is slow or rejected | The trace shows the rejection and retry; narrate it. Turns are capped (limits are in the trace). |
 | The chat shows `(error: …)` | The client retries with the same message ID; resend. |
 | You want to show resuming | `/quit`, then `chat --session N`: the card is shown again with a fresh receipt. |
+| The first request shows a card instead of "couldn't find" | It's no longer Sunday afternoon in India time. Carry on with "Recording on another day" below. |
 
 ## Where each PDF requirement is shown
 
 | PDF requirement | In the video | Also shown by |
 | --- | --- | --- |
-| Clarify only missing details; don't re-ask | 0:20 (area from memory, nothing re-asked) | S01–S03, S04 |
-| Preserve context when one detail is corrected | 1:00 | S04, S38 (BUG-011) |
+| Clarify only missing details; don't re-ask | 0:20, 0:50 (area from memory, nothing re-asked) | S01–S03, S04 |
+| Preserve context when one detail is corrected | 0:50 | S04, S38 (BUG-011) |
 | Explicit workflow state | trace `state.transition` lines throughout | DESIGN.md "State model" |
-| Approval enforced by code; material change invalidates | 1:00, 1:40 | S06, S13, S16 (price), S32 (slot) |
+| Approval enforced by code; material change invalidates | 1:40 (only `yes` or the code approves) | S04 and S32 (a change invalidates the card), S06, S13, S16 (price) |
 | Bounded execution, clear outcome on every exit | limits in `run.ended` counters | S14, S15, S34 |
 | No duplicates; verify after timeout; never claim early | 2:20 | S27, S28, S31, S33; raw trace `artifacts/traces/` |
 | Untrusted tool output, prompt injection | 1:40 | S05, S07 |
@@ -233,6 +244,20 @@ Show `artifacts/eval/eval_table.md` for two seconds if you have time.
 | Tool failures: slot taken, reschedule conflict, cancel 503 | (off-script table) | S29, S30, S35 |
 | Real LLM; offline evals with a scripted model | real model live; tests are offline | README "Evidence", `artifacts/smoke/` |
 | Three real bugs with regression tests | close | docs/BUGS.md (highlighted: 002, 008, 007) |
+
+## Recording on another day
+
+If you record between Monday and Thursday (India time), or on a Sunday morning, the first request
+goes straight to a ranked list and a card. Keep the script; only the 0:20–1:40 part changes:
+
+- **0:20:** a card appears. Point at the same `extract` and `memories` lines.
+- **0:50:** still type `Actually, make it next week.`. The chat says the old card **no longer
+  applies** and shows a new one. **Say:** "Any change to provider, slot or price invalidates the
+  approval I was about to give; only the new card can be approved." This also shows approval
+  invalidation live, so in the map above add 0:50 to the approval row.
+
+From Friday afternoon to Sunday morning, check with a dry run first: whether mornings remain
+"this week" depends on the hour.
 
 ## After recording
 
