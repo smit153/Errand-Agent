@@ -23,7 +23,7 @@ from errand_agent.mocks.catalog import DEMO_USER, INJECTION_REVIEW
 from errand_agent.tools.client import ToolClient
 from errand_agent.tools.context import ToolContext
 from errand_agent.workflow.agent import Agent, AgentReply
-from errand_agent.workflow.agent_tools import STATE_TOOLS, ToolNotAllowedError, ensure_allowed
+from errand_agent.workflow.agent_tools import STATE_TOOLS, ToolNotAllowedError, ensure_allowed, update_request_tool
 from errand_agent.workflow.states import STATES
 from tests.conftest import make_session
 from tests.helpers import count
@@ -692,3 +692,47 @@ def test_model_invented_date_span_is_rejected(chat: Chat) -> None:
         text("Which area are you in?"),
     )
     assert any("date_expression must be copied verbatim" in p for p in chat.rejected())
+
+
+@pytest.mark.invariant
+@pytest.mark.scenario(
+    "S38",
+    'Correcting the date mid-booking ("make it next week") with a model that flips the intent',
+    expected="The ungrounded reschedule intent is rejected; the booking request keeps its service, area, "
+    "time and budget, and a new card is built for next week; no existing booking is touched",
+    covers="PDF §3 preserve context on correction; BUG-011",
+)
+def test_a_date_correction_cannot_turn_a_new_booking_into_a_reschedule(chat: Chat) -> None:
+    plumber_card(chat)
+    corrected = chat.say(
+        "Actually, make it next week.",
+        extract(intent="reschedule", date_expression="next week"),  # seen live: "make it" read as "move it"
+        extract(date_expression="next week"),
+        *SEARCH_TO_CARD,
+    )
+    assert any("intent is not stated" in p for p in chat.rejected())
+    assert all("list_bookings" not in names for names in chat.offered())
+    assert "no longer applies" in chat.text(corrected)
+    assert corrected.state == "awaiting_approval"
+    assert chat.bookings() == 0
+
+
+@pytest.mark.parametrize(
+    ("message", "intent", "allowed"),
+    [
+        ("Move my AC servicing to Saturday.", "reschedule", True),  # PDF example
+        ("Can you reschedule my electrician visit?", "reschedule", True),
+        ("Please postpone it to Friday", "reschedule", True),
+        ("Cancel my AC servicing.", "cancel", True),
+        ("I no longer need the plumber", "cancel", True),
+        ("Actually, make it next week.", "reschedule", False),  # BUG-011, seen live
+        ("Saturday instead", "reschedule", False),
+        ("make it Koramangala", "cancel", False),
+        ("Find a plumber for my kitchen tap", "book", True),
+    ],
+)
+def test_intent_needs_the_users_own_words(message: str, intent: str, allowed: bool) -> None:
+    tool = update_request_tool(message, [])
+    assert tool.check is not None
+    problem = tool.check(tool.args.model_validate({"intent": intent}))
+    assert (problem is None) is allowed

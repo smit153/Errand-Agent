@@ -179,3 +179,26 @@ test now guards against regression. Entries are added as bugs are encountered, n
   (same receipt still valid, no extra hold, one pending card; verified failing before the fix).
 - **Known limit, recorded in DECISIONS §19:** after a genuine change, our own earlier hold can
   still hide that slot until it expires (there is no release-hold tool in the fixed contracts).
+
+## BUG-011 — "make it next week" turned a new booking into a reschedule
+
+- **Found:** 2026-11-08, while rehearsing the recorded demo with the real model (Codex). On a
+  Sunday afternoon "this week, mornings only" had no slots left, so the user corrected the date:
+  "Actually, make it next week."
+- **What broke:** the model's extraction set `intent: "reschedule"` ("make it" read as "move
+  it"). The app accepted it, so the request in progress (plumber, Indiranagar, mornings, under
+  ₹1,500) became a reschedule. The agent called `list_bookings` and replied "I couldn't find an
+  upcoming plumber booking for you, so there's nothing to change." The correction to one detail
+  had changed the whole errand, which breaks PDF §3 ("preserve unrelated context when a user
+  corrects one detail").
+- **Why:** every other extracted field was grounded in the user's own words (verbatim spans for
+  date/time/budget, supported service and area), but `intent` was not, so a model misreading
+  went straight into the request.
+- **Fix:** `update_request` rejects `reschedule` or `cancel` unless the user's message contains a
+  matching cue (`INTENT_CUES` in `workflow/agent_tools.py`: move, reschedule, postpone, cancel, no
+  longer need, …). The model gets the reason and retries; `book` needs no cue because it has no
+  side effect without a card and approval.
+- **Regression tests:** `tests/test_agent_scenarios.py::test_a_date_correction_cannot_turn_a_new_booking_into_a_reschedule`
+  (eval scenario S38; verified failing before the fix with "search_providers not offered;
+  offered ['list_bookings']") and `test_intent_needs_the_users_own_words` (the PDF's "Move my AC
+  servicing to Saturday." still passes).

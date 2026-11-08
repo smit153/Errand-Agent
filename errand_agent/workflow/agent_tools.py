@@ -7,6 +7,7 @@ are enums of values that exist right now; a tool with an empty enum is simply no
 
 from __future__ import annotations
 
+import re
 from datetime import datetime
 from typing import Any
 
@@ -32,6 +33,20 @@ STATE_TOOLS: dict[SessionState, frozenset[str]] = {
     "conflict": frozenset({"update_request"}),
     "completed": frozenset({"update_request"}),
     "failed": frozenset({"update_request"}),
+}
+
+
+# Changing an existing booking is a different errand from making a new one, so the model may only
+# pick those intents when the user's own words say so. "Make it next week" corrects a detail of the
+# request in progress; it must not turn it into a reschedule (BUG-011). "book" needs no cue: it
+# is the default and has no side effect without a card and approval.
+INTENT_CUES: dict[str, re.Pattern[str]] = {
+    "reschedule": re.compile(
+        r"\b(move|moving|reschedul\w*|shift|postpone|prepone|push (?:it )?back|bring (?:it )?forward|"
+        r"change (?:my|the) (?:\w+ )?(?:booking|appointment|slot|visit))\b",
+        re.I,
+    ),
+    "cancel": re.compile(r"\b(cancel\w*|call(?:ing)? (?:it )?off|(?:don'?t|do not|no longer) need)\b", re.I),
 }
 
 
@@ -63,6 +78,12 @@ def update_request_tool(user_text: str, option_numbers: list[int]) -> ToolDef:
 
     def grounded(args: BaseModel) -> str | None:
         data = args.model_dump()
+        cue = INTENT_CUES.get(data.get("intent") or "")
+        if cue is not None and not cue.search(user_text):
+            return (
+                f"intent is not stated in the user's message: '{data['intent']}' is only for changing an "
+                "existing booking when the user asks to; leave intent null when they correct a detail"
+            )
         for name in ("date_expression", "time_expression", "budget_expression"):
             value = data.get(name)
             if value is not None and not occurs_in(value, user_text):
