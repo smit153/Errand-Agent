@@ -147,7 +147,7 @@ no install, standard library only):
 
 ```bash
 python3 -m errand_agent.cli chat               # the conversation; notifications appear as they arrive
-python3 -m errand_agent.cli trace --follow     # live trace of every run
+python3 -m errand_agent.cli trace --follow --new-only   # live trace of every new run (omit --new-only to print the history first)
 ```
 
 `--demo-controls` adds endpoints that steer the mocks for a demo

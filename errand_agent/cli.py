@@ -2,7 +2,7 @@
 Python 3.12+ from the repository root, no install needed.
 
     python3 -m errand_agent.cli chat [--session N]          # chat; notifications appear as they arrive
-    python3 -m errand_agent.cli trace --follow               # live trace pane (run beside the chat)
+    python3 -m errand_agent.cli trace --follow --new-only    # live trace pane (run beside the chat)
     python3 -m errand_agent.cli demo next-booking timeout_booked   # demo controls (server --demo-controls)
     python3 -m errand_agent.cli demo provider-cancel BK-000002
     python3 -m errand_agent.cli demo bookings
@@ -181,9 +181,20 @@ def run_chat(client: ChatClient, session_id: int | None, stdin: TextIO = sys.std
     return 0
 
 
-def run_trace(client: ChatClient, *, session_id: int | None, follow: bool, raw: bool) -> int:
+def latest_trace_id(client: ChatClient, path: str) -> int:
+    """The newest trace line's ID (the server pages its answer, so keep asking until it's empty)."""
     after = 0
+    while lines := client.call("GET", f"{path}?after={after}"):
+        after = max(int(entry["id"]) for entry in lines)
+    return after
+
+
+def run_trace(client: ChatClient, *, session_id: int | None, follow: bool, raw: bool, new_only: bool = False) -> int:
     path = f"/sessions/{session_id}/trace" if session_id else "/trace"
+    after = 0
+    if new_only:
+        after = latest_trace_id(client, path)
+        client.print("(showing new trace lines only)")
     while True:
         lines = client.call("GET", f"{path}?after={after}" + ("&raw=true" if raw else ""))
         for entry in lines:
@@ -206,6 +217,7 @@ def main(argv: list[str] | None = None) -> int:
     trace.add_argument("--session", type=int)
     trace.add_argument("--follow", action="store_true")
     trace.add_argument("--raw", action="store_true")
+    trace.add_argument("--new-only", action="store_true", help="skip what's already in the trace")
     sub.add_parser("sessions")
     demo = sub.add_parser("demo")
     demo_sub = demo.add_subparsers(dest="action", required=True)
@@ -220,7 +232,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "chat":
             return run_chat(client, args.session)
         if args.command == "trace":
-            return run_trace(client, session_id=args.session, follow=args.follow, raw=args.raw)
+            return run_trace(client, session_id=args.session, follow=args.follow, raw=args.raw, new_only=args.new_only)
         if args.command == "sessions":
             for s in client.call("GET", "/sessions"):
                 client.print(f"#{s['session_id']}  {s['state']}")

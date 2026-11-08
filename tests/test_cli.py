@@ -194,3 +194,27 @@ def test_resuming_shows_the_pending_card_again_and_yes_approves_it(api: Api) -> 
     assert resumed.receipt_id != first.receipt_id  # a fresh receipt for the card shown again
     assert resumed.say("yes")["state"] == "completed"
     assert api.bookings() == 1
+
+
+def test_trace_new_only_skips_the_history(api: Api) -> None:
+    """The demo's trace pane starts empty instead of printing the seeded history first."""
+    c, out = client(api)
+    c.start(None)
+    api.model.extend(
+        [
+            extract(
+                intent="book",
+                service="plumber",
+                date_expression="this week",
+                time_expression="mornings only",
+                budget_expression="under ₹1,500",
+            ),
+            comply("ask_user"),
+            text("Which area are you in?"),
+        ]
+    )
+    c.say(PLUMBER)
+    run_trace(c, session_id=None, follow=False, raw=False, new_only=True)
+    shown = out.getvalue()
+    assert "(showing new trace lines only)" in shown
+    assert "extract #1" not in shown
