@@ -6,6 +6,9 @@ live (prompt injection in a review, a user trying to skip approval, a timeout af
 actually succeeded, and a provider cancelling). Everything the video has no time for is shown by
 the other deliverables; the map at the end says where each requirement is shown.
 
+New to the project? Read [DEMO_GUIDE.md](DEMO_GUIDE.md) first: it explains what each scene
+shows and why, in plain words.
+
 Every line quoted below was seen in a rehearsal with the real model (Codex via ModelMux) on
 2026-11-08. Model replies take about 5–7 s per call, so a turn that searches, holds and shows a
 card takes about 30 s: talk over it.
