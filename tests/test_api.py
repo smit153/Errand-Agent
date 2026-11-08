@@ -225,7 +225,7 @@ def test_trace_feed_and_notifications(api: Api, db: Database, clock: FakeClock) 
     sid = api.session()
     api.card(sid)
     lines = api.client.get("/trace").json()
-    assert any(entry["kind"] == "model.call" and "accepted" in entry["line"] for entry in lines)
+    assert any(entry["kind"] == "model.call" and "proposed" in entry["line"] for entry in lines)
     assert any(entry["kind"] == "tool.call" and "search_providers" in entry["line"] for entry in lines)
     last = lines[-1]["id"]
     assert api.client.get(f"/trace?after={last}").json() == []

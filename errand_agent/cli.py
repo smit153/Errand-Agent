@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import sys
 import threading
@@ -189,8 +190,42 @@ def latest_trace_id(client: ChatClient, path: str) -> int:
     return after
 
 
-def run_trace(client: ChatClient, *, session_id: int | None, follow: bool, raw: bool, new_only: bool = False) -> int:
+# ANSI colours per trace tag (see errand_agent/api/tracefmt.py). Off when not a terminal or NO_COLOR is set.
+COLOURS = {
+    "user": "1;36",  # bold cyan: what the user typed
+    "agent": "37",  # white: agent replies and request changes
+    "model": "35",  # magenta: model calls
+    "tool": "33",  # yellow: tool calls and results
+    "state": "34",  # blue: workflow state changes
+    "approval": "1;32",  # bold green: approval
+    "operation": "32",  # green: the booking operation
+    "guard": "32",
+    "memory": "36",  # cyan: memory
+    "event": "1;35",  # bold magenta: provider events
+    "run": "2",  # dim: run boundaries
+    "detail": "2",
+    "error": "1;31",  # bold red: errors, rejections, limits
+}
+
+
+def _paint(text: str, tag: str, colour: bool) -> str:
+    code = COLOURS.get(tag)
+    return f"\033[{code}m{text}\033[0m" if colour and code else text
+
+
+def run_trace(
+    client: ChatClient,
+    *,
+    session_id: int | None,
+    follow: bool,
+    raw: bool,
+    new_only: bool = False,
+    show_all: bool = False,
+    colour: bool | None = None,
+) -> int:
     path = f"/sessions/{session_id}/trace" if session_id else "/trace"
+    if colour is None:
+        colour = client.out.isatty() and "NO_COLOR" not in os.environ
     after = 0
     if new_only:
         after = latest_trace_id(client, path)
@@ -198,8 +233,16 @@ def run_trace(client: ChatClient, *, session_id: int | None, follow: bool, raw: 
     while True:
         lines = client.call("GET", f"{path}?after={after}" + ("&raw=true" if raw else ""))
         for entry in lines:
-            client.print(json.dumps(entry, ensure_ascii=False) if raw else entry["line"])
             after = max(after, int(entry["id"]))
+            if raw:
+                client.print(json.dumps(entry, ensure_ascii=False))
+                continue
+            tag = str(entry.get("tag", ""))
+            if tag == "detail" and not show_all:
+                continue
+            if entry.get("kind") == "run.started":
+                client.print("")  # a gap between runs: one user message (or background job) per block
+            client.print(_paint(entry["line"], tag, colour))
         if not follow:
             return 0
         client.sleep(1.0)
@@ -218,6 +261,8 @@ def main(argv: list[str] | None = None) -> int:
     trace.add_argument("--follow", action="store_true")
     trace.add_argument("--raw", action="store_true")
     trace.add_argument("--new-only", action="store_true", help="skip what's already in the trace")
+    trace.add_argument("--all", action="store_true", help="also show lease bookkeeping")
+    trace.add_argument("--no-colour", action="store_true")
     sub.add_parser("sessions")
     demo = sub.add_parser("demo")
     demo_sub = demo.add_subparsers(dest="action", required=True)
@@ -232,7 +277,15 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "chat":
             return run_chat(client, args.session)
         if args.command == "trace":
-            return run_trace(client, session_id=args.session, follow=args.follow, raw=args.raw, new_only=args.new_only)
+            return run_trace(
+                client,
+                session_id=args.session,
+                follow=args.follow,
+                raw=args.raw,
+                new_only=args.new_only,
+                show_all=args.all,
+                colour=False if args.no_colour else None,
+            )
         if args.command == "sessions":
             for s in client.call("GET", "/sessions"):
                 client.print(f"#{s['session_id']}  {s['state']}")

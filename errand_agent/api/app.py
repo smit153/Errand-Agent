@@ -77,6 +77,7 @@ class TraceLine(BaseModel):
     id: int
     session_id: int | None
     kind: str
+    tag: str
     line: str
     payload: dict[str, Any] | None = None
 
@@ -203,16 +204,20 @@ def _trace(db: Database, user_id: str, *, after: int, raw: bool, session_id: int
             " AND (%s::bigint IS NULL OR t.session_id = %s) ORDER BY t.id LIMIT 500",
             (user_id, after, session_id, session_id),
         )
-    return [
-        TraceLine(
-            id=int(r["id"]),
-            session_id=r["session_id"],
-            kind=r["kind"],
-            line=line(int(r["id"]), r["at"], r["session_id"], r["kind"], r["payload"]),
-            payload=r["payload"] if raw else None,
+    out = []
+    for r in rows:
+        tag, text = line(int(r["id"]), r["at"], r["session_id"], r["kind"], r["payload"])
+        out.append(
+            TraceLine(
+                id=int(r["id"]),
+                session_id=r["session_id"],
+                kind=r["kind"],
+                tag=tag,
+                line=text,
+                payload=r["payload"] if raw else None,
+            )
         )
-        for r in rows
-    ]
+    return out
 
 
 def _add_demo_routes(app: FastAPI, *, db: Database, backend: MockBackend, user_id: str) -> None:

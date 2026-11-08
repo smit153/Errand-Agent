@@ -153,8 +153,9 @@ def test_trace_once_prints_formatted_lines(api: Api) -> None:
     c.say(PLUMBER)
     run_trace(c, session_id=c.session_id, follow=False, raw=False)
     shown = out.getvalue()
-    assert "state.transition" in shown or "model.call" in shown
-    assert "extract #1 accepted update_request" in shown
+    assert "MODEL" in shown
+    assert "extract (read the message) #1: proposed update_request ✓" in shown
+    assert "\x1b[" not in shown  # no colour codes when the output is not a terminal
 
 
 def test_errors_are_reported_not_raised_from_the_chat_loop(api: Api) -> None:
