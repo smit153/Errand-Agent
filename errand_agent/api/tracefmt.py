@@ -15,6 +15,20 @@ def _short(value: Any, limit: int = 90) -> str:
     return text if len(text) <= limit else text[: limit - 1] + "…"
 
 
+def _context(ctx: dict[str, Any]) -> str:
+    """What reached the model: request size against the cap, which memories, how many reviews."""
+    text = f"{ctx.get('request_bytes')}/{ctx.get('cap_bytes')} B"
+    sections = (ctx.get("plan") or {}).get("sections") or {}
+    mem = sections.get("memories")
+    if mem:
+        ids = ",".join(mem.get("included") or []) or "none"
+        text += f"; memories {ids} ({len(mem.get('included') or [])}/{mem.get('offered')})"
+    rev = sections.get("reviews")
+    if rev:
+        text += f"; reviews {len(rev.get('included') or [])}/{rev.get('offered')} as untrusted data"
+    return text
+
+
 def summary(kind: str, p: dict[str, Any]) -> str:
     if kind == "agent.user_message":
         return f'user: "{_short(p.get("text", ""), 80)}"'
@@ -26,10 +40,9 @@ def summary(kind: str, p: dict[str, Any]) -> str:
     if kind == "model.call":
         usage = p.get("usage") or {}
         verdict = f"accepted {p.get('accepted')}" if p.get("accepted") else f"REJECTED: {_short(p.get('problem'), 50)}"
-        size = (p.get("context") or {}).get("request_bytes")
         return (
             f"{p.get('purpose')} #{p.get('attempt')} {verdict}; {p.get('latency_ms')} ms; "
-            f"tokens {usage.get('prompt_tokens')}/{usage.get('completion_tokens')}; {size} B"
+            f"tokens {usage.get('prompt_tokens')}/{usage.get('completion_tokens')}; {_context(p.get('context') or {})}"
         )
     if kind == "tool.attempt_started":
         return f"→ {p.get('tool')}({_short(p.get('args'), 70)})"
